@@ -14,19 +14,21 @@ return new class extends Migration
         Schema::create('data_plps', function (Blueprint $table) {
             $table->id();
 
+            $table->foreignId('program_id')->constrained('programs');
+            $table->foreignId('sub_program_id')->constrained('sub_programs');
+
             $table->string('nim');
             $table->foreign('nim')->references('nim')->on('mahasiswas')->cascadeOnDelete();
 
             $table->foreignId('kegiatan_id')->constrained('kegiatans');
-            $table->foreignId('instansi_id')->constrained('instansis');
+            $table->foreignId('mitra_id')->constrained('mitras');
 
             $table->integer('sks');
-            $table->enum('semester', ['Ganjil', 'Genap']);
-            $table->year('tahun');
+            $table->enum('semester', ['GANJIL', 'GENAP']);
             $table->string('tahun_ajaran');
-
-            $table->string('penyelenggara')->nullable();
-            $table->string('program_owner')->nullable();
+            $table->string('semester_ta');
+            $table->enum('penyelenggara', ['Eksternal', 'Internal']);
+            $table->string('dosen_pembimbing')->nullable();
 
             $table->timestamps();
         });

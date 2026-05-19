@@ -11,10 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('fakultas', function (Blueprint $table) {
-            $table->id();
-            $table->string('nama_fakultas')->unique();
-            $table->timestamps();
+        Schema::table('admins', function (Blueprint $table) {
+            $table->rememberToken();
         });
     }
 
@@ -23,6 +21,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('fakultas');
+        Schema::table('admins', function (Blueprint $table) {
+            $table->dropColumn('remember_token');
+        });
     }
 };

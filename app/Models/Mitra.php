@@ -4,11 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class Instansi extends Model
+class Mitra extends Model
 {
-    protected $fillable = ['nama_instansi'];
+    protected $fillable = ['nama_mitra'];
 
-    public function dataPlps() {
+    public function dataPlps()
+    {
         return $this->hasMany(DataPlps::class);
     }
 }
