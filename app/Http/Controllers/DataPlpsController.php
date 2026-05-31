@@ -10,6 +10,7 @@ use App\Models\Fakultas;
 use App\Models\Prodi;
 use App\Models\Program;
 use App\Models\SubProgram;
+use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Imports\DataPlpsImport;
 
@@ -17,111 +18,468 @@ class DataPlpsController extends Controller
 {
     public function index(Request $request)
     {
-        $query = DataPlps::with([
-            'program',
-            'subProgram',
-            'mahasiswa.prodi.fakultas',
-            'kegiatan',
-            'mitra'
-        ]);
+        $hasData = DataPlps::exists();
 
-        // Filter: Program
-        if ($request->program_id) {
-            $query->where('program_id', $request->program_id);
+        $programs = DB::table('programs')
+            ->leftJoin('data_plps', 'programs.id', '=', 'data_plps.program_id')
+            ->select('programs.id', 'programs.nama_program', DB::raw('COUNT(data_plps.id) as total'))
+            ->groupBy('programs.id', 'programs.nama_program')
+            ->orderBy('programs.nama_program')
+            ->get();
+
+        $subPrograms = DB::table('sub_programs')
+            ->leftJoin('data_plps', 'sub_programs.id', '=', 'data_plps.sub_program_id')
+            ->select('sub_programs.id', 'sub_programs.nama_sub_program', DB::raw('COUNT(data_plps.id) as total'))
+            ->groupBy('sub_programs.id', 'sub_programs.nama_sub_program')
+            ->orderBy('sub_programs.nama_sub_program')
+            ->get();
+
+        $fakultas = DB::table('fakultas')
+            ->leftJoin('prodis', 'fakultas.id', '=', 'prodis.fakultas_id')
+            ->leftJoin('mahasiswas', 'prodis.id', '=', 'mahasiswas.prodi_id')
+            ->leftJoin('data_plps', 'mahasiswas.nim', '=', 'data_plps.nim')
+            ->select('fakultas.id', 'fakultas.nama_fakultas', DB::raw('COUNT(data_plps.id) as total'))
+            ->groupBy('fakultas.id', 'fakultas.nama_fakultas')
+            ->orderBy('fakultas.nama_fakultas')
+            ->get();
+
+        $prodi = DB::table('prodis')
+            ->leftJoin('mahasiswas', 'prodis.id', '=', 'mahasiswas.prodi_id')
+            ->leftJoin('data_plps', 'mahasiswas.nim', '=', 'data_plps.nim')
+            ->select('prodis.id', 'prodis.nama_prodi', DB::raw('COUNT(data_plps.id) as total'))
+            ->groupBy('prodis.id', 'prodis.nama_prodi')
+            ->orderBy('prodis.nama_prodi')
+            ->get();
+
+        $allMitra = DB::table('mitras')
+            ->leftJoin('data_plps', 'mitras.id', '=', 'data_plps.mitra_id')
+            ->select('mitras.id', 'mitras.nama_mitra', DB::raw('COUNT(data_plps.id) as total'))
+            ->groupBy('mitras.id', 'mitras.nama_mitra')
+            ->orderBy('mitras.nama_mitra')
+            ->get();
+
+        if (!$hasData) {
+            return view('dashboard', [
+                'hasData' => false,
+                'programs' => $programs,
+                'subPrograms' => $subPrograms,
+                'fakultas' => $fakultas,
+                'prodi' => $prodi,
+                'allMitra' => $allMitra,
+            ]);
         }
 
-        // Filter: Sub Program
-        if ($request->sub_program_id) {
-            $query->where('sub_program_id', $request->sub_program_id);
+        // === SUMMARY STATS ===
+        $baseQuery = DataPlps::query();
+        $this->applyEloquentFilters($baseQuery, $request);
+
+        $totalMahasiswa = (clone $baseQuery)->distinct()->count('nim');
+        $totalMitra = (clone $baseQuery)->distinct()->count('mitra_id');
+        $totalProgram = (clone $baseQuery)->distinct()->count('program_id');
+        $totalSubProgram = (clone $baseQuery)->distinct()->count('sub_program_id');
+
+        // === MAHASISWA PER FAKULTAS ===
+        $mahasiswaPerFakultas = $this->chartQuery($request)
+            ->select('fakultas.nama_fakultas', DB::raw('COUNT(DISTINCT data_plps.nim) as total'))
+            ->groupBy('fakultas.nama_fakultas')
+            ->orderByDesc('total')
+            ->get();
+
+        // === TOP 7 PRODI ===
+        $topProdi = $this->chartQuery($request)
+            ->select('prodis.nama_prodi', DB::raw('COUNT(DISTINCT data_plps.nim) as total'))
+            ->groupBy('prodis.nama_prodi')
+            ->orderByDesc('total')
+            ->limit(7)
+            ->get();
+
+        // === TOP 5 MITRA ===
+        $topMitraData = $this->chartQuery($request)
+            ->join('mitras', 'data_plps.mitra_id', '=', 'mitras.id')
+            ->select('mitras.nama_mitra', DB::raw('COUNT(DISTINCT data_plps.nim) as total'))
+            ->groupBy('mitras.nama_mitra', 'mitras.id')
+            ->orderByDesc('total')
+            ->limit(5)
+            ->get();
+
+        // === TREN PER SEMESTER ===
+        $trenRaw = $this->chartQuery($request)
+            ->select('fakultas.nama_fakultas', 'data_plps.semester_ta', DB::raw('COUNT(DISTINCT data_plps.nim) as total'))
+            ->groupBy('fakultas.nama_fakultas', 'data_plps.semester_ta')
+            ->orderBy('data_plps.semester_ta')
+            ->get();
+
+        $semesters = $trenRaw->pluck('semester_ta')->unique()->sort()->values()->toArray();
+        $fakultasInTren = $trenRaw->pluck('nama_fakultas')->unique()->values();
+        $trenSeries = [];
+        foreach ($fakultasInTren as $fak) {
+            $data = [];
+            foreach ($semesters as $sem) {
+                $entry = $trenRaw->where('nama_fakultas', $fak)->where('semester_ta', $sem)->first();
+                $data[] = $entry ? $entry->total : 0;
+            }
+            $trenSeries[] = ['label' => $fak, 'data' => $data];
         }
-
-        // Filter: Kegiatan
-        if ($request->kegiatan_id) {
-            $query->where('kegiatan_id', $request->kegiatan_id);
-        }
-
-        // Filter: Mitra
-        if ($request->mitra_id) {
-            $query->where('mitra_id', $request->mitra_id);
-        }
-
-        // Filter: Semester
-        if ($request->semester) {
-            $query->where('semester', $request->semester);
-        }
-
-        // Filter: Tahun Ajaran
-        if ($request->tahun_ajaran) {
-            $query->where('tahun_ajaran', $request->tahun_ajaran);
-        }
-
-        // Filter: Penyelenggara
-        if ($request->penyelenggara) {
-            $query->where('penyelenggara', $request->penyelenggara);
-        }
-
-        // Filter: Fakultas
-        if ($request->fakultas_id) {
-            $query->whereHas('mahasiswa.prodi.fakultas', function ($q) use ($request) {
-                $q->where('id', $request->fakultas_id);
-            });
-        }
-
-        // Filter: Prodi
-        if ($request->prodi_id) {
-            $query->whereHas('mahasiswa.prodi', function ($q) use ($request) {
-                $q->where('id', $request->prodi_id);
-            });
-        }
-
-        // Filter: SKS
-        if ($request->sks) {
-            $query->where('sks', $request->sks);
-        }
-
-        $data = $query->get();
-
-        // Data untuk dropdown filter
-        $programs = Program::all();
-        $subPrograms = SubProgram::all();
-        $kegiatan = Kegiatan::all();
-        $mitra = Mitra::all();
-        $fakultas = Fakultas::all();
-        $prodi = Prodi::all();
 
         return view('dashboard', compact(
-            'data',
+            'hasData',
             'programs',
             'subPrograms',
-            'kegiatan',
-            'mitra',
             'fakultas',
-            'prodi'
+            'prodi',
+            'allMitra',
+            'totalMahasiswa',
+            'totalMitra',
+            'totalProgram',
+            'totalSubProgram',
+            'mahasiswaPerFakultas',
+            'topProdi',
+            'topMitraData',
+            'semesters',
+            'trenSeries'
         ));
     }
 
-    public function import(Request $request)
+    /**
+     * API endpoint for lazy-loaded table data.
+     * Returns paginated JSON data (50 per page).
+     */
+    public function tableData(Request $request)
     {
-        $request->validate([
-            'file' => 'required|mimes:xlsx,csv'
+        $query = DataPlps::with(['program', 'subProgram', 'mahasiswa.prodi.fakultas', 'kegiatan', 'mitra']);
+        $this->applyEloquentFilters($query, $request);
+
+        if ($request->search_nama) {
+            $query->whereHas('mahasiswa', function ($q) use ($request) {
+                $q->where('nama', 'LIKE', '%' . $request->search_nama . '%');
+            });
+        }
+        if ($request->search_nim) {
+            $query->where('nim', 'LIKE', '%' . $request->search_nim . '%');
+        }
+
+        $paginated = $query->orderBy('id', 'desc')->paginate(50);
+
+        // Transform data for frontend
+        $rows = $paginated->getCollection()->map(function ($row, $index) use ($paginated) {
+            return [
+                'id' => $row->id,
+                'no' => $paginated->firstItem() + $index,
+                'program' => $row->program->nama_program ?? '-',
+                'sub_program' => $row->subProgram->nama_sub_program ?? '-',
+                'fakultas' => $row->mahasiswa->prodi->fakultas->nama_fakultas ?? '-',
+                'prodi' => $row->mahasiswa->prodi->nama_prodi ?? '-',
+                'nama' => $row->mahasiswa->nama ?? '-',
+                'nim' => $row->nim,
+                'kegiatan' => $row->kegiatan->nama_kegiatan ?? '-',
+                'mitra' => $row->mitra->nama_mitra ?? '-',
+                'penyelenggara' => $row->penyelenggara,
+                'semester' => $row->semester,
+                'tahun_ajaran' => $row->tahun_ajaran,
+                'dosen_pembimbing' => $row->dosen_pembimbing ?? '-',
+                'sks' => $row->sks,
+            ];
+        });
+
+        return response()->json([
+            'data' => $rows,
+            'current_page' => $paginated->currentPage(),
+            'last_page' => $paginated->lastPage(),
+            'total' => $paginated->total(),
+            'from' => $paginated->firstItem(),
+            'to' => $paginated->lastItem(),
         ]);
+    }
 
-        try {
-            $importer = new DataPlpsImport;
-            Excel::import($importer, $request->file('file'));
+    /**
+     * Expand comma-separated ID values from multi-select checkboxes.
+     * e.g. ["1,2", "3"] => [1, 2, 3]
+     */
+    private function expandIds($input)
+    {
+        $values = (array) $input;
+        $expanded = [];
+        foreach ($values as $v) {
+            foreach (explode(',', $v) as $id) {
+                $id = trim($id);
+                if ($id !== '') $expanded[] = $id;
+            }
+        }
+        return array_unique($expanded);
+    }
 
-            return back()->with('success', 'Import berhasil');
+    /**
+     * Apply filters to Eloquent DataPlps query
+     */
+    private function applyEloquentFilters($query, Request $request)
+    {
+        if ($request->has('program_id') && !empty(array_filter((array)$request->program_id))) {
+            $query->whereIn('program_id', $this->expandIds($request->program_id));
+        }
+        if ($request->has('sub_program_id') && !empty(array_filter((array)$request->sub_program_id))) {
+            $query->whereIn('sub_program_id', $this->expandIds($request->sub_program_id));
+        }
+        if ($request->has('mitra_id') && !empty(array_filter((array)$request->mitra_id))) {
+            $query->whereIn('mitra_id', $this->expandIds($request->mitra_id));
+        }
+        if ($request->has('penyelenggara') && !empty(array_filter((array)$request->penyelenggara))) {
+            $query->whereIn('penyelenggara', (array)$request->penyelenggara);
+        }
+        if ($request->has('fakultas_id') && !empty(array_filter((array)$request->fakultas_id))) {
+            $ids = $this->expandIds($request->fakultas_id);
+            $query->whereHas('mahasiswa.prodi', fn($q) => $q->whereIn('fakultas_id', $ids));
+        }
+        if ($request->has('prodi_id') && !empty(array_filter((array)$request->prodi_id))) {
+            $ids = $this->expandIds($request->prodi_id);
+            $query->whereHas('mahasiswa', fn($q) => $q->whereIn('prodi_id', $ids));
+        }
+    }
 
-        } catch (\Exception $e) {
-            // Kalau ada error dari importer, pass sebagai array untuk popup modal
-            $importer = $importer ?? new DataPlpsImport;
-            if (!empty($importer->errors)) {
-                return back()->with('import_errors', $importer->errors);
+    /**
+     * Base DB query builder with joins + filters for chart queries
+     */
+    private function chartQuery(Request $request)
+    {
+        $q = DB::table('data_plps')
+            ->join('mahasiswas', 'data_plps.nim', '=', 'mahasiswas.nim')
+            ->join('prodis', 'mahasiswas.prodi_id', '=', 'prodis.id')
+            ->join('fakultas', 'prodis.fakultas_id', '=', 'fakultas.id');
+
+        if ($request->has('program_id') && !empty(array_filter((array)$request->program_id))) {
+            $q->whereIn('data_plps.program_id', $this->expandIds($request->program_id));
+        }
+        if ($request->has('sub_program_id') && !empty(array_filter((array)$request->sub_program_id))) {
+            $q->whereIn('data_plps.sub_program_id', $this->expandIds($request->sub_program_id));
+        }
+        if ($request->has('mitra_id') && !empty(array_filter((array)$request->mitra_id))) {
+            $q->whereIn('data_plps.mitra_id', $this->expandIds($request->mitra_id));
+        }
+        if ($request->has('penyelenggara') && !empty(array_filter((array)$request->penyelenggara))) {
+            $q->whereIn('data_plps.penyelenggara', (array)$request->penyelenggara);
+        }
+        if ($request->has('fakultas_id') && !empty(array_filter((array)$request->fakultas_id))) {
+            $q->whereIn('prodis.fakultas_id', $this->expandIds($request->fakultas_id));
+        }
+        if ($request->has('prodi_id') && !empty(array_filter((array)$request->prodi_id))) {
+            $q->whereIn('mahasiswas.prodi_id', $this->expandIds($request->prodi_id));
+        }
+
+        return $q;
+    }
+
+    /**
+     * API endpoint for cascading filters.
+     * Returns available options + counts for each filter,
+     * computed by applying all OTHER active filters (cross-filter).
+     */
+    public function getFilterOptions(Request $request)
+    {
+        // Helper: build a base query with specific filters applied
+        $buildBase = function (array $excludeFilters = []) use ($request) {
+            $q = DB::table('data_plps')
+                ->join('mahasiswas', 'data_plps.nim', '=', 'mahasiswas.nim')
+                ->join('prodis', 'mahasiswas.prodi_id', '=', 'prodis.id')
+                ->join('fakultas', 'prodis.fakultas_id', '=', 'fakultas.id');
+
+            if (!in_array('program_id', $excludeFilters) && $request->has('program_id') && !empty(array_filter((array)$request->program_id))) {
+                $q->whereIn('data_plps.program_id', $this->expandIds($request->program_id));
+            }
+            if (!in_array('sub_program_id', $excludeFilters) && $request->has('sub_program_id') && !empty(array_filter((array)$request->sub_program_id))) {
+                $q->whereIn('data_plps.sub_program_id', $this->expandIds($request->sub_program_id));
+            }
+            if (!in_array('mitra_id', $excludeFilters) && $request->has('mitra_id') && !empty(array_filter((array)$request->mitra_id))) {
+                $q->whereIn('data_plps.mitra_id', $this->expandIds($request->mitra_id));
+            }
+            if (!in_array('penyelenggara', $excludeFilters) && $request->has('penyelenggara') && !empty(array_filter((array)$request->penyelenggara))) {
+                $q->whereIn('data_plps.penyelenggara', (array)$request->penyelenggara);
+            }
+            if (!in_array('fakultas_id', $excludeFilters) && $request->has('fakultas_id') && !empty(array_filter((array)$request->fakultas_id))) {
+                $q->whereIn('prodis.fakultas_id', $this->expandIds($request->fakultas_id));
+            }
+            if (!in_array('prodi_id', $excludeFilters) && $request->has('prodi_id') && !empty(array_filter((array)$request->prodi_id))) {
+                $q->whereIn('mahasiswas.prodi_id', $this->expandIds($request->prodi_id));
             }
 
-            // Error lain (file corrupt, dsb)
+            return $q;
+        };
+
+        // Programs: apply all filters EXCEPT program_id
+        $programs = $buildBase(['program_id'])
+            ->join('programs', 'data_plps.program_id', '=', 'programs.id')
+            ->select('programs.id', 'programs.nama_program as label', DB::raw('COUNT(data_plps.id) as total'))
+            ->groupBy('programs.id', 'programs.nama_program')
+            ->orderBy('programs.nama_program')
+            ->get();
+
+        // Sub Programs: apply all filters EXCEPT sub_program_id
+        $subPrograms = $buildBase(['sub_program_id'])
+            ->join('sub_programs', 'data_plps.sub_program_id', '=', 'sub_programs.id')
+            ->select('sub_programs.id', 'sub_programs.nama_sub_program as label', DB::raw('COUNT(data_plps.id) as total'))
+            ->groupBy('sub_programs.id', 'sub_programs.nama_sub_program')
+            ->orderBy('sub_programs.nama_sub_program')
+            ->get();
+
+        // Fakultas: apply all filters EXCEPT fakultas_id
+        $fakultas = $buildBase(['fakultas_id'])
+            ->select('fakultas.id', 'fakultas.nama_fakultas as label', DB::raw('COUNT(data_plps.id) as total'))
+            ->groupBy('fakultas.id', 'fakultas.nama_fakultas')
+            ->orderBy('fakultas.nama_fakultas')
+            ->get();
+
+        // Prodi: apply all filters EXCEPT prodi_id
+        $prodi = $buildBase(['prodi_id'])
+            ->select('prodis.id', 'prodis.nama_prodi as label', DB::raw('COUNT(data_plps.id) as total'))
+            ->groupBy('prodis.id', 'prodis.nama_prodi')
+            ->orderBy('prodis.nama_prodi')
+            ->get();
+
+        // Mitra: apply all filters EXCEPT mitra_id
+        $allMitra = $buildBase(['mitra_id'])
+            ->join('mitras', 'data_plps.mitra_id', '=', 'mitras.id')
+            ->select('mitras.id', 'mitras.nama_mitra as label', DB::raw('COUNT(data_plps.id) as total'))
+            ->groupBy('mitras.id', 'mitras.nama_mitra')
+            ->orderBy('mitras.nama_mitra')
+            ->get();
+
+        // Penyelenggara: apply all filters EXCEPT penyelenggara
+        $penyelenggara = $buildBase(['penyelenggara'])
+            ->select('data_plps.penyelenggara as label', DB::raw('COUNT(data_plps.id) as total'))
+            ->groupBy('data_plps.penyelenggara')
+            ->orderBy('data_plps.penyelenggara')
+            ->get()
+            ->map(function ($item) {
+                // Use penyelenggara value as id too
+                $item->id = $item->label;
+                return $item;
+            });
+
+        return response()->json([
+            'program_id' => $programs,
+            'sub_program_id' => $subPrograms,
+            'fakultas_id' => $fakultas,
+            'prodi_id' => $prodi,
+            'mitra_id' => $allMitra,
+            'penyelenggara' => $penyelenggara,
+        ]);
+    }
+
+    // =============================================
+    // INPUT DATA PAGE METHODS
+    // =============================================
+
+    /**
+     * Show the Data Input page with upload zone and history.
+     */
+    public function inputData()
+    {
+        $histories = \App\Models\ImportHistory::with('admin')
+            ->orderBy('created_at', 'desc')
+            ->take(20)
+            ->get();
+
+        return view('input-data', compact('histories'));
+    }
+
+    /**
+     * Step 1: Validate uploaded Excel without saving to DB.
+     * If valid → store temp file + redirect to confirmation.
+     * If errors → redirect back with error modal.
+     */
+    public function validateImport(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|mimes:xlsx,csv|max:10240'
+        ]);
+
+        $originalName = $request->file('file')->getClientOriginalName();
+
+        // Store file temporarily
+        $storedPath = $request->file('file')->store('temp-imports');
+        session(['last_import_path' => $storedPath]);
+        session(['last_import_filename' => $originalName]);
+
+        $fullPath = \Illuminate\Support\Facades\Storage::path($storedPath);
+
+        try {
+            // Validate only — do not save to DB
+            $importer = new DataPlpsImport(true);
+            Excel::import($importer, $fullPath);
+
+            // Validation passed! Store row count and redirect to confirm page
+            session(['import_row_count' => $importer->validRowCount]);
+
+            return redirect('/input-data/confirm');
+
+        } catch (\Exception $e) {
+            $importer = $importer ?? new DataPlpsImport;
+            if (!empty($importer->errors)) {
+                return back()
+                    ->with('import_errors', $importer->errors);
+            }
+
             return back()->with('error', $e->getMessage());
         }
+    }
+
+    /**
+     * Step 2a: Show the confirmation page.
+     */
+    public function showConfirmImport()
+    {
+        $rowCount = session('import_row_count', 0);
+        $storedPath = session('last_import_path');
+        $originalName = session('last_import_filename', 'file.xlsx');
+
+        if (!$storedPath || !$rowCount) {
+            return redirect('/input-data')->with('error', 'Tidak ada data untuk dikonfirmasi. Silakan upload ulang.');
+        }
+
+        return view('confirm-import', compact('rowCount', 'originalName'));
+    }
+
+    /**
+     * Step 2b: Actually import and save to DB.
+     */
+    public function confirmImport(Request $request)
+    {
+        $storedPath = session('last_import_path');
+        $originalName = session('last_import_filename', 'file.xlsx');
+
+        if (!$storedPath || !\Illuminate\Support\Facades\Storage::exists($storedPath)) {
+            return redirect('/input-data')->with('error', 'File import tidak ditemukan. Silakan upload ulang.');
+        }
+
+        try {
+            $importer = new DataPlpsImport(false); // validateOnly = false, save to DB
+            $fullPath = \Illuminate\Support\Facades\Storage::path($storedPath);
+            Excel::import($importer, $fullPath);
+
+            // Record history
+            \App\Models\ImportHistory::create([
+                'filename' => $originalName,
+                'admin_id' => \Illuminate\Support\Facades\Auth::guard('admin')->id(),
+                'rows_count' => $importer->validRowCount,
+            ]);
+
+            // Clean up
+            \Illuminate\Support\Facades\Storage::delete($storedPath);
+            session()->forget(['last_import_path', 'last_import_filename', 'import_row_count']);
+
+            return redirect('/input-data')
+                ->with('success', "{$importer->validRowCount} data berhasil diimport ke database!")
+                ->with('show_success_modal', true);
+
+        } catch (\Exception $e) {
+            return redirect('/input-data')->with('error', 'Gagal menyimpan data: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Download Excel template.
+     */
+    public function downloadTemplate()
+    {
+        return Excel::download(new \App\Exports\TemplateExport, 'template_data_plps.xlsx');
     }
 
     public function update(Request $request, $id)

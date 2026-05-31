@@ -7,40 +7,48 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
-<body class="bg-gray-100 flex items-center justify-center min-h-screen">
-    <div class="bg-white p-10 w-full max-w-md rounded shadow">
-        <h1 class="text-2xl font-bold text-gray-800 mb-6">Login Admin</h1>
+<body class="flex items-center justify-center min-h-screen" style="background-color: #7B1113;">
+    <div class="bg-white p-10 w-full max-w-sm shadow-2xl flex flex-col items-center" style="border-radius: 32px;">
+        
+        {{-- Logos Placeholder --}}
+        <div class="flex items-center justify-center gap-6 mb-6">
+            <img src="{{ asset('images/telkom.png') }}" alt="Telkom University" class="h-10 object-contain">
+            <img src="{{ asset('images/bpa.png') }}" alt="BPA" class="h-10 object-contain">
+        </div>
+
+        <h1 class="text-xl font-medium mb-8" style="color: #ed3237;">Login admin</h1>
 
         @if ($errors->any())
-            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
-                <ul>
-                    @foreach ($errors->all() as $error)
-                        <li>{{ $error }}</li>
-                    @endforeach
-                </ul>
+            <div class="bg-red-50 text-red-500 text-sm px-4 py-2 rounded-xl mb-6 w-full text-center">
+                @foreach ($errors->all() as $error)
+                    <div>{{ $error }}</div>
+                @endforeach
             </div>
         @endif
 
-        <form method="POST" action="/login">
+        <form method="POST" action="{{ route('login') }}" class="w-full flex flex-col gap-4">
             @csrf
 
-            <div class="mb-8 relative">
-                <input type="text" name="login_id" placeholder="Username / Email"
-                    class="w-full border-b border-gray-300 pb-2 focus:outline-none focus:border-blue-500 text-gray-700 placeholder-gray-400"
+            <div class="relative w-full">
+                <input type="text" name="login_id" placeholder="Email / Username"
+                    class="w-full bg-gray-200 text-gray-700 placeholder-gray-500 px-5 py-3 focus:outline-none focus:ring-2 focus:ring-red-400"
+                    style="border-radius: 20px; font-size: 13px;"
                     required autofocus value="{{ old('login_id') }}">
             </div>
 
-            <div class="mb-10 relative">
+            <div class="relative w-full">
                 <input type="password" id="password" name="password" placeholder="Password"
-                    class="w-full border-b border-gray-300 pb-2 focus:outline-none focus:border-blue-500 text-gray-700 placeholder-gray-400 pr-8"
+                    class="w-full bg-gray-200 text-gray-700 placeholder-gray-500 px-5 py-3 pr-10 focus:outline-none focus:ring-2 focus:ring-red-400"
+                    style="border-radius: 20px; font-size: 13px;"
                     required>
-                <button type="button" class="absolute right-0 top-0 text-gray-700 hover:text-gray-900 focus:outline-none" onclick="togglePassword()">
+                <button type="button" class="absolute right-4 top-3 text-gray-400 hover:text-gray-600 focus:outline-none" onclick="togglePassword()">
                     <i class="fa fa-eye" id="togglePasswordIcon"></i>
                 </button>
             </div>
 
             <button type="submit"
-                class="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+                class="w-full mt-4 text-white font-medium py-3 px-4 shadow-sm hover:opacity-90 transition"
+                style="background-color: #8bb4f6; border-radius: 20px; font-size: 14px;">
                 Login
             </button>
         </form>

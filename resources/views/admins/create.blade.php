@@ -7,53 +7,74 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
-<body class="bg-gray-100 p-8">
-    <div class="max-w-md mx-auto bg-white rounded shadow p-6">
-        <h1 class="text-2xl font-bold text-gray-800 mb-6">Create Admin</h1>
+<body class="bg-gray-50 p-6 md:p-10 min-h-screen">
+    
+    <div class="max-w-2xl mx-auto flex justify-between items-start mb-6">
+        <div>
+            <h1 class="text-3xl font-bold tracking-tight" style="color: #7B1113;">Super Admin</h1>
+            <p class="text-gray-600 mt-1">Tambah admin baru</p>
+        </div>
+        <div class="flex flex-col items-end justify-center">
+            <form action="/logout" method="POST" class="inline">
+                @csrf
+                <button type="submit" class="text-red-500 hover:text-red-700 text-sm font-medium"><i class="fas fa-sign-out-alt"></i> Logout</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="max-w-2xl mx-auto bg-white rounded-2xl shadow-sm p-8" style="box-shadow: 0 4px 20px rgba(0,0,0,0.05);">
+        <h2 class="text-2xl font-bold text-gray-800 mb-6">Form Admin Baru</h2>
 
         @if ($errors->any())
-            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
-                <ul>
-                    @foreach ($errors->all() as $error)
-                        <li>{{ $error }}</li>
-                    @endforeach
-                </ul>
+            <div class="bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-lg mb-6 flex items-center gap-2">
+                <i class="fas fa-exclamation-circle"></i> Terdapat kesalahan pada input.
             </div>
         @endif
 
-        <form action="{{ route('admins.store') }}" method="POST">
+        <form action="{{ route('admins.store') }}" method="POST" class="flex flex-col gap-5">
             @csrf
-            <div class="mb-6 relative">
-                <input type="text" name="username" placeholder="Username" class="w-full border-b border-gray-300 pb-2 focus:outline-none focus:border-blue-500 text-gray-700 placeholder-gray-400"required>
+            
+            <div class="relative w-full">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                <input type="text" name="username" placeholder="Masukkan username" 
+                    class="w-full bg-gray-50 border border-gray-200 text-gray-800 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-400 focus:bg-white transition"
+                    required>
+                @error('username')<p class="text-red-500 text-xs mt-1">{{ $message }}</p>@enderror
             </div>
             
-            <div class="mb-2 relative">
-                <input type="password" id="password" name="password" placeholder="Password" 
-                    class="w-full border-b border-gray-300 pb-2 focus:outline-none focus:border-blue-500 text-gray-700 placeholder-gray-400 pr-10"
-                    required oninput="checkPasswordStrength(this.value)">
-                <button type="button" class="absolute right-0 top-0 text-gray-700 hover:text-gray-900 focus:outline-none" onclick="togglePassword()">
-                    <i class="fa fa-eye" id="togglePasswordIcon"></i>
-                </button>
+            <div class="relative w-full">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <div class="relative">
+                    <input type="password" id="password" name="password" placeholder="Masukkan password" 
+                        class="w-full bg-gray-50 border border-gray-200 text-gray-800 px-4 py-3 pr-10 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-400 focus:bg-white transition"
+                        required oninput="checkPasswordStrength(this.value)">
+                    <button type="button" class="absolute right-4 top-3 text-gray-400 hover:text-gray-600 focus:outline-none" onclick="togglePassword()">
+                        <i class="fa fa-eye" id="togglePasswordIcon"></i>
+                    </button>
+                </div>
+                @error('password')<p class="text-red-500 text-xs mt-1">{{ $message }}</p>@enderror
             </div>
+
             {{-- Password requirements --}}
-            <div class="mb-6 text-xs space-y-1">
-                <p id="req-length" class="flex items-center gap-1 text-gray-400">
-                    <i class="fa fa-circle text-[6px]"></i> Minimal 8 karakter
+            <div class="bg-gray-50 p-4 rounded-xl border border-gray-100 text-xs space-y-2 mt-1">
+                <p id="req-length" class="flex items-center gap-2 text-gray-400">
+                    <i class="fa fa-circle text-[8px]"></i> Minimal 8 karakter
                 </p>
-                <p id="req-upper" class="flex items-center gap-1 text-gray-400">
-                    <i class="fa fa-circle text-[6px]"></i> Mengandung huruf besar (A-Z)
+                <p id="req-upper" class="flex items-center gap-2 text-gray-400">
+                    <i class="fa fa-circle text-[8px]"></i> Mengandung huruf besar (A-Z)
                 </p>
-                <p id="req-special" class="flex items-center gap-1 text-gray-400">
-                    <i class="fa fa-circle text-[6px]"></i> Mengandung karakter spesial (!?@#$%^&amp;* dll)
+                <p id="req-special" class="flex items-center gap-2 text-gray-400">
+                    <i class="fa fa-circle text-[8px]"></i> Mengandung karakter spesial (!?@#$%^&amp;* dll)
                 </p>
             </div>
-            <div class="flex items-center justify-between">
-                <button class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" type="submit">
-                    Create
-                </button>
-                <a class="inline-block align-baseline font-bold text-sm text-blue-500 hover:text-blue-800" href="{{ route('admins.index') }}">
-                    Cancel
+
+            <div class="flex items-center justify-end gap-3 mt-4">
+                <a class="text-gray-500 hover:text-gray-700 font-medium py-2 px-4 transition" href="{{ route('admins.index') }}">
+                    Batal
                 </a>
+                <button class="bg-[#7B1113] hover:bg-red-900 text-white font-medium py-2 px-6 rounded-lg transition shadow-sm flex items-center gap-2" type="submit">
+                    <i class="fas fa-save"></i> Simpan Admin
+                </button>
             </div>
         </form>
     </div>

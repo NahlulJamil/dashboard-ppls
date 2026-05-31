@@ -42,7 +42,7 @@ class AdminManagementController extends Controller
             'role' => 'admin',
         ]);
 
-        return redirect()->route('admins.index')->with('success', 'Admin created successfully.');
+        return redirect()->route('admins.index')->with('success', 'Admin berhasil ditambahkan!');
     }
 
     public function edit(Admin $admin)
@@ -79,7 +79,7 @@ class AdminManagementController extends Controller
         }
         $admin->save();
 
-        return redirect()->route('admins.index')->with('success', 'Admin updated successfully.');
+        return redirect()->route('admins.index')->with('success', 'Data admin berhasil diperbarui!');
     }
 
     public function destroy(Admin $admin)
@@ -90,6 +90,6 @@ class AdminManagementController extends Controller
 
         $admin->delete();
 
-        return redirect()->route('admins.index')->with('success', 'Admin deleted successfully.');
+        return redirect()->route('admins.index')->with('success', 'Admin berhasil dihapus!');
     }
 }

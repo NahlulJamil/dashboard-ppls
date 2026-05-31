@@ -7,17 +7,17 @@ use App\Http\Controllers\Auth\AdminLoginController;
 use App\Http\Controllers\AdminManagementController;
 
 Route::get('/', function () {
-    return redirect('/login');
+    return redirect('/dashboard');
 });
 
 // Auth routes
-Route::get('/login', [AdminLoginController::class, 'showLoginForm'])->name('login');
-Route::post('/login', [AdminLoginController::class, 'login']);
+Route::get('/care', [AdminLoginController::class, 'showLoginForm'])->name('login');
+Route::post('/care', [AdminLoginController::class, 'login']);
 Route::post('/logout', [AdminLoginController::class, 'logout'])->name('logout');
 
 // captcha step superadmin (cm bisa diakses pas sesi pending)
-Route::get('/login/captcha', [AdminLoginController::class, 'showCaptchaForm'])->name('login.captcha');
-Route::post('/login/captcha', [AdminLoginController::class, 'verifyCaptcha'])->name('login.captcha.verify');
+Route::get('/care/captcha', [AdminLoginController::class, 'showCaptchaForm'])->name('login.captcha');
+Route::post('/care/captcha', [AdminLoginController::class, 'verifyCaptcha'])->name('login.captcha.verify');
 
 // Refresh captcha image ajax
 Route::get('/refresh-captcha', [AdminLoginController::class, 'refreshCaptcha']);
@@ -27,6 +27,14 @@ Route::middleware(['auth:admin', 'super_admin'])->group(function () {
     Route::resource('admins', AdminManagementController::class)->except(['show']);
 });
 
-// Admin routes
-Route::get('/dashboard', [DataPlpsController::class, 'index'])->middleware('auth:admin');
-Route::post('/import', [DataPlpsController::class, 'import'])->middleware('auth:admin');
+// Guest/Admin Dashboard routes
+Route::get('/dashboard', [DataPlpsController::class, 'index']);
+Route::get('/api/filter-options', [DataPlpsController::class, 'getFilterOptions']);
+Route::get('/api/table-data', [DataPlpsController::class, 'tableData']);
+
+// Data Input routes
+Route::get('/input-data', [DataPlpsController::class, 'inputData'])->middleware('auth:admin');
+Route::post('/input-data/validate', [DataPlpsController::class, 'validateImport'])->middleware('auth:admin')->name('input.validate');
+Route::get('/input-data/confirm', [DataPlpsController::class, 'showConfirmImport'])->middleware('auth:admin')->name('input.confirm.show');
+Route::post('/input-data/confirm', [DataPlpsController::class, 'confirmImport'])->middleware('auth:admin')->name('input.confirm');
+Route::get('/input-data/template', [DataPlpsController::class, 'downloadTemplate'])->middleware('auth:admin')->name('input.template');

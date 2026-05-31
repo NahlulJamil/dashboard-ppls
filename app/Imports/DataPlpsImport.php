@@ -12,11 +12,19 @@ use App\Models\Program;
 use App\Models\SubProgram;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\ToCollection;
+use Illuminate\Support\Facades\DB;
 use Exception;
 
 class DataPlpsImport implements ToCollection
 {
     public $errors = [];
+    public $validateOnly = false;
+    public $validRowCount = 0;
+
+    public function __construct(bool $validateOnly = false)
+    {
+        $this->validateOnly = $validateOnly;
+    }
 
     /**
      * Mapping kolom Excel (0-indexed):
@@ -37,6 +45,7 @@ class DataPlpsImport implements ToCollection
      */
     public function collection(Collection $rows)
     {
+        DB::transaction(function () use ($rows) {
         foreach ($rows as $index => $row) {
             // Skip header row (baris pertama = template/keterangan kolom)
             if ($index == 0) continue;
@@ -90,13 +99,23 @@ class DataPlpsImport implements ToCollection
                     throw new Exception("Fakultas \"{$fakultasInput}\" tidak valid. Fakultas yang tersedia: {$validFakultas}");
                 }
 
-                // === PRODI (firstOrCreate, scoped ke fakultas) ===
-                $prodi = Prodi::firstOrCreate(
-                    [
-                        'nama_prodi' => $prodiInput,
-                        'fakultas_id' => $fakultas->id,
-                    ]
-                );
+                // === PRODI (case-insensitive lookup, scoped ke fakultas) ===
+                $prodi = Prodi::whereRaw('LOWER(nama_prodi) = ?', [mb_strtolower($prodiInput)])
+                    ->where('fakultas_id', $fakultas->id)
+                    ->first();
+                if (!$prodi) {
+                    // Cek juga apakah ada prodi dengan nama sama di fakultas manapun
+                    $existingProdi = Prodi::whereRaw('LOWER(nama_prodi) = ?', [mb_strtolower($prodiInput)])->first();
+                    if ($existingProdi) {
+                        // Prodi sudah ada di fakultas lain, gunakan yang sudah ada
+                        $prodi = $existingProdi;
+                    } else {
+                        $prodi = Prodi::create([
+                            'nama_prodi' => $prodiInput,
+                            'fakultas_id' => $fakultas->id,
+                        ]);
+                    }
+                }
 
                 // === PROGRAM (firstOrCreate + unique) ===
                 $program = $this->safeFirstOrCreate(
@@ -105,15 +124,26 @@ class DataPlpsImport implements ToCollection
                     $programInput
                 );
 
-                // === SUB PROGRAM (firstOrCreate + scoped ke program) ===
-                $subProgram = SubProgram::firstOrCreate(
-                    [
-                        'nama_sub_program' => $subProgramInput,
-                        'program_id' => $program->id,
-                    ]
-                );
+                // === SUB PROGRAM (case-insensitive lookup, scoped ke program) ===
+                $subProgram = SubProgram::whereRaw('LOWER(nama_sub_program) = ?', [mb_strtolower($subProgramInput)])
+                    ->where('program_id', $program->id)
+                    ->first();
+                if (!$subProgram) {
+                    // Cek juga apakah ada sub program dengan nama sama di program manapun
+                    $existingSub = SubProgram::whereRaw('LOWER(nama_sub_program) = ?', [mb_strtolower($subProgramInput)])->first();
+                    if ($existingSub) {
+                        $subProgram = $existingSub;
+                    } else {
+                        $subProgram = SubProgram::create([
+                            'nama_sub_program' => $subProgramInput,
+                            'program_id' => $program->id,
+                        ]);
+                    }
+                }
 
                 // === MAHASISWA (updateOrCreate by NIM) ===
+                // Pakai updateOrCreate agar prodi_id & nama selalu ter-update
+                // ketika mahasiswa yang sama muncul di import berbeda.
                 $mahasiswa = Mahasiswa::updateOrCreate(
                     ['nim' => $nimInput],
                     [
@@ -148,20 +178,24 @@ class DataPlpsImport implements ToCollection
                     throw new Exception("Data duplikat (NIM: {$nimInput}, Kegiatan: {$kegiatanInput}, Semester: {$semesterInput}, TA: {$tahunAjaranInput})");
                 }
 
-                // === SIMPAN DATA PLPS ===
-                DataPlps::create([
-                    'program_id' => $program->id,
-                    'sub_program_id' => $subProgram->id,
-                    'nim' => $nimInput,
-                    'kegiatan_id' => $kegiatan->id,
-                    'mitra_id' => $mitra->id,
-                    'sks' => (int) $sksInput,
-                    'semester' => $semesterInput,
-                    'tahun_ajaran' => $tahunAjaranInput,
-                    'semester_ta' => $semesterTaInput,
-                    'penyelenggara' => $penyelenggaraNormalized,
-                    'dosen_pembimbing' => !empty($dosenInput) ? $dosenInput : null,
-                ]);
+                if (!$this->validateOnly) {
+                    // === SIMPAN DATA PLPS ===
+                    DataPlps::create([
+                        'program_id' => $program->id,
+                        'sub_program_id' => $subProgram->id,
+                        'nim' => $nimInput,
+                        'kegiatan_id' => $kegiatan->id,
+                        'mitra_id' => $mitra->id,
+                        'sks' => (int) $sksInput,
+                        'semester' => $semesterInput,
+                        'tahun_ajaran' => $tahunAjaranInput,
+                        'semester_ta' => $semesterTaInput,
+                        'penyelenggara' => $penyelenggaraNormalized,
+                        'dosen_pembimbing' => !empty($dosenInput) ? $dosenInput : null,
+                    ]);
+                }
+
+                $this->validRowCount++;
 
             } catch (Exception $e) {
                 $this->errors[] = "Baris {$line}: " . $e->getMessage();
@@ -171,6 +205,7 @@ class DataPlpsImport implements ToCollection
         if (count($this->errors) > 0) {
             throw new Exception(implode("\n", $this->errors));
         }
+        }); // end DB::transaction
     }
 
     // =============================================
@@ -252,14 +287,7 @@ class DataPlpsImport implements ToCollection
 
     /**
      * Fuzzy firstOrCreate untuk data dinamis (Mitra, Kegiatan).
-     *
-     * Flow:
-     * 1. Exact match (case-insensitive) → pakai existing
-     * 2. Fuzzy match (>= 80% similar) → REJECT dengan saran perbaikan
-     * 3. Tidak ada match sama sekali → create baru
-     *
-     * Ini mencegah typo seperti "Kemendikbud Ristek" vs "Kemendikbudristek"
-     * dari bikin record baru yang ngerusak filter.
+     * mencegah typo seperti "Kemendikbud Ristek" vs "Kemendikbudristek"
      */
     private function fuzzyFirstOrCreate(string $modelClass, string $column, string $value, float $threshold = 80.0)
     {
@@ -286,8 +314,7 @@ class DataPlpsImport implements ToCollection
             if ($percent >= $threshold) {
                 throw new Exception(
                     "Kemungkinan typo: \"{$value}\" mirip dengan \"{$existingValue}\" " .
-                    "({$percent}% kemiripan). Perbaiki data di Excel jika memang sama, " .
-                    "atau abaikan jika memang berbeda."
+                    "({$percent}% kemiripan). Perbaiki data di Excel agar penulisan sama persis."
                 );
             }
         }

@@ -1,150 +1,968 @@
-<form action="/import" method="POST" enctype="multipart/form-data">
-    @csrf
-    <input type="file" name="file" required>
-    <button type="submit">Import</button>
-</form>
+@extends('layouts.app')
 
-@if(session('success'))
-<div style="color:green;">
-    {{ session('success') }}
-</div>
+@section('head')
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+@endsection
+
+@section('styles')
+<style>
+    /* Filter */
+    .filter-grid{display:flex;flex-wrap:wrap;gap:10px}
+    .filter-actions{display:flex;gap:10px;margin-top:14px;justify-content:flex-end}
+
+    /* Checkbox Multi-Select Dropdown */
+    .ms-dropdown{position:relative;min-width:160px;flex:1;max-width:220px}
+    .ms-trigger{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit;color:#334155;background:#fff;cursor:pointer;transition:all .2s;gap:6px;user-select:none;white-space:nowrap;overflow:hidden}
+    .ms-trigger:hover{border-color:#7B1113;background:#fef9f9}
+    .ms-trigger.active{border-color:#7B1113;box-shadow:0 0 0 3px rgba(123,17,19,.12)}
+    .ms-trigger.has-selection{background:linear-gradient(135deg,#7B1113,#A41E1E);color:#fff;border-color:#7B1113}
+    .ms-trigger.has-selection:hover{opacity:.92}
+    .ms-trigger .ms-label{overflow:hidden;text-overflow:ellipsis;flex:1;text-align:left}
+    .ms-trigger .ms-badge{background:rgba(255,255,255,.25);color:#fff;font-size:11px;font-weight:700;padding:1px 7px;border-radius:10px;min-width:20px;text-align:center;flex-shrink:0}
+    .ms-trigger .ms-arrow{font-size:10px;transition:transform .2s;flex-shrink:0;margin-left:4px}
+    .ms-trigger.active .ms-arrow{transform:rotate(180deg)}
+    .ms-panel{position:absolute;top:calc(100% + 6px);left:0;width:280px;background:#fff;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,.18),0 2px 8px rgba(0,0,0,.08);z-index:200;display:none;overflow:hidden;border:1px solid #e2e8f0;animation:msFadeIn .15s ease}
+    @keyframes msFadeIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+    .ms-panel.show{display:block}
+    .ms-panel-header{padding:10px 14px;background:linear-gradient(135deg,#7B1113,#A41E1E);color:#fff;display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:600}
+    .ms-panel-header label{display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600}
+    .ms-panel-header input[type=checkbox]{accent-color:#fff;width:15px;height:15px;cursor:pointer}
+    .ms-search{padding:8px 12px;border-bottom:1px solid #f1f5f9}
+    .ms-search input{width:100%;padding:7px 10px 7px 30px;border:1.5px solid #e2e8f0;border-radius:6px;font-size:12px;font-family:inherit;background:#f8fafc url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zm-5.242.156a5 5 0 1 1 0-10 5 5 0 0 1 0 10z'/%3E%3C/svg%3E") no-repeat 9px center;outline:none;transition:border-color .2s}
+    .ms-search input:focus{border-color:#7B1113}
+    .ms-options{max-height:220px;overflow-y:auto;padding:4px 0}
+    .ms-options::-webkit-scrollbar{width:5px}
+    .ms-options::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
+    .ms-option{display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;transition:background .12s;font-size:13px;color:#334155}
+    .ms-option:hover{background:#fef2f2}
+    .ms-option.hidden{display:none}
+    .ms-option input[type=checkbox]{accent-color:#7B1113;width:15px;height:15px;cursor:pointer;flex-shrink:0}
+    .ms-option span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .ms-count{flex:0 0 auto !important;background:#f1f5f9;color:#64748b;font-size:11px;font-weight:600;padding:1px 8px;border-radius:10px;min-width:22px;text-align:center}
+    .ms-option:hover .ms-count{background:#fecaca;color:#991b1b}
+    .ms-no-result{padding:16px;text-align:center;color:#94a3b8;font-size:12px;font-style:italic}
+
+    /* Active Filter Tags */
+    .filter-tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+    .filter-tag{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;background:linear-gradient(135deg,#fef2f2,#fff1f2);border:1px solid #fecaca;border-radius:20px;font-size:12px;font-weight:500;color:#991b1b;animation:tagIn .2s ease}
+    @keyframes tagIn{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}
+    .filter-tag i{font-size:10px}
+    .filter-tag .tag-remove{cursor:pointer;margin-left:2px;opacity:.6;transition:opacity .15s;font-size:13px;font-weight:700;line-height:1}
+    .filter-tag .tag-remove:hover{opacity:1}
+
+    /* Summary */
+    .summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:20px}
+    .summary-card{background:#fff;border-radius:14px;padding:22px 24px;box-shadow:0 1px 4px rgba(0,0,0,.06);display:flex;align-items:center;gap:16px;transition:transform .2s}
+    .summary-card:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,.1)}
+    .summary-icon{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px}
+    .summary-card .value{font-size:32px;font-weight:800;line-height:1}
+    .summary-card .label{font-size:12px;color:#64748b;font-weight:500;margin-top:4px}
+    /* Charts */
+    .chart-row{display:grid;grid-template-columns:1.2fr 1fr;gap:20px;margin-bottom:20px}
+    .chart-title{font-size:16px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+    /* Mitra ranking */
+    .mitra-list{list-style:none}
+    .mitra-item{display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid #f1f5f9}
+    .mitra-item:last-child{border:none}
+    .mitra-rank{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#7B1113,#c0392b);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
+    .mitra-name{flex:1;font-size:14px;font-weight:500}
+    .mitra-count{font-size:14px;font-weight:700;color:#7B1113}
+    /* Table */
+    .data-table{width:100%;border-collapse:collapse;font-size:13px}
+    .data-table thead{background:linear-gradient(135deg,#7B1113,#A41E1E);color:#fff}
+    .data-table th{padding:12px 14px;text-align:left;font-weight:600;white-space:nowrap}
+    .data-table td{padding:10px 14px;border-bottom:1px solid #f1f5f9;white-space:nowrap}
+    .data-table tbody tr:hover{background:#fef2f2}
+    .search-bar{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+    .search-bar input{padding:9px 14px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit;min-width:220px}
+    .search-bar input:focus{outline:none;border-color:#7B1113}
+    /* Lazy loading table */
+    .table-wrap{overflow-x:auto;max-height:600px;overflow-y:auto;position:relative}
+    .table-wrap::-webkit-scrollbar{width:6px;height:6px}
+    .table-wrap::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
+    .table-info{display:flex;align-items:center;justify-content:space-between;margin-top:12px;font-size:12px;color:#64748b}
+    .table-info .count{font-weight:600;color:#334155}
+    .table-status{text-align:center;padding:20px;font-size:13px;color:#94a3b8}
+    .table-status i{margin-right:6px}
+    .skeleton-row td{padding:12px 14px}
+    .skeleton-bar{height:14px;background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%);background-size:200% 100%;border-radius:4px;animation:shimmer 1.5s infinite}
+    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+    .scroll-sentinel{height:1px}
+    .data-table thead th{position:sticky;top:0;z-index:2}
+    /* Empty */
+    .empty-state{text-align:center;padding:80px 20px;color:#94a3b8}
+    .empty-state i{font-size:56px;margin-bottom:16px;display:block}
+    .empty-state p{font-size:16px;font-weight:500}
+
+    /* Responsive */
+    @media(max-width:900px){.chart-row{grid-template-columns:1fr}.ms-dropdown{max-width:none}}
+    @media(max-width:600px){.summary-grid{grid-template-columns:1fr 1fr}.filter-grid{flex-direction:column}.ms-dropdown{max-width:none}}
+
+    /* Filter loading indicator */
+    .filter-loading{position:relative;pointer-events:none;opacity:.6}
+    .filter-loading::after{content:'';position:absolute;top:50%;left:50%;width:18px;height:18px;margin:-9px 0 0 -9px;border:2.5px solid #e2e8f0;border-top-color:#7B1113;border-radius:50%;animation:filterSpin .6s linear infinite;z-index:10}
+    @keyframes filterSpin{to{transform:rotate(360deg)}}
+    .ms-option.unavailable{opacity:.35;order:1;pointer-events:none;cursor:not-allowed;user-select:none}
+    .ms-option.unavailable input[type=checkbox]{pointer-events:none}
+    .ms-option:not(.unavailable){order:0}
+    .ms-options{display:flex;flex-direction:column}
+</style>
+@endsection
+
+@section('content')
+
+@if(session('error'))
+<div class="card" style="background:#fef2f2;border:1px solid #fecaca;color:#991b1b">{!! nl2br(session('error')) !!}</div>
 @endif
 
-{{-- ============ ERROR POPUP MODAL ============ --}}
-@if(session('import_errors'))
-<div id="errorModal" style="
-    position: fixed;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    background: rgba(0, 0, 0, 0.6);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 9999;
-">
-    <div style="
-        background: #fff;
-        border-radius: 12px;
-        width: 90%;
-        max-width: 700px;
-        max-height: 80vh;
-        display: flex;
-        flex-direction: column;
-        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        overflow: hidden;
-    ">
-        {{-- Header --}}
-        <div style="
-            background: linear-gradient(135deg, #ef4444, #dc2626);
-            color: #fff;
-            padding: 18px 24px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        ">
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <span style="font-size: 22px;">⚠️</span>
-                <div>
-                    <div style="font-size: 16px; font-weight: 700;">Import Gagal</div>
-                    <div style="font-size: 12px; opacity: 0.9;">
-                        {{ count(session('import_errors')) }} error ditemukan — perbaiki file Excel lalu import ulang
+@if(!($hasData ?? false))
+{{-- EMPTY STATE --}}
+<div class="card">
+    <div class="empty-state">
+        <i class="fas fa-database"></i>
+        <p>Belum ada data</p>
+    </div>
+</div>
+@else
+
+{{-- FILTER --}}
+<div class="card" id="filterCard">
+    <div class="chart-title"><i class="fas fa-filter"></i> Filter Data</div>
+    <form method="GET" action="/dashboard" id="filterForm">
+        <div class="filter-grid">
+
+            {{-- Program --}}
+            <div class="ms-dropdown" data-name="program_id" data-label="Program">
+                <div class="ms-trigger" onclick="togglePanel(this)">
+                    <span class="ms-label">Semua Program</span>
+                    <span class="ms-arrow"><i class="fas fa-chevron-down"></i></span>
+                </div>
+                <div class="ms-panel">
+                    <div class="ms-panel-header">
+                        <label><input type="checkbox" class="ms-select-all" onchange="toggleAll(this)"> Pilih Semua</label>
+                    </div>
+                    <div class="ms-search"><input type="text" placeholder="Cari program..." oninput="searchOptions(this)"></div>
+                    <div class="ms-options">
+                        @foreach($programs as $p)
+                        @php $isChecked = is_array(request('program_id')) && in_array($p->id, request('program_id')); @endphp
+                        <label class="ms-option" data-id="{{ $p->id }}">
+                            <input type="checkbox" name="program_id[]" value="{{ $p->id }}" {{ $isChecked ? 'checked' : '' }} onchange="updateDropdown(this)">
+                            <span>{{ $p->nama_program }}</span>
+                            <span class="ms-count">{{ $p->total }}</span>
+                        </label>
+                        @endforeach
                     </div>
                 </div>
             </div>
-            <button onclick="document.getElementById('errorModal').style.display='none'"
-                style="
-                    background: rgba(255,255,255,0.2);
-                    border: none;
-                    color: #fff;
-                    font-size: 20px;
-                    cursor: pointer;
-                    border-radius: 6px;
-                    width: 32px; height: 32px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                ">✕</button>
+
+            {{-- Sub Program --}}
+            <div class="ms-dropdown" data-name="sub_program_id" data-label="Sub Program">
+                <div class="ms-trigger" onclick="togglePanel(this)">
+                    <span class="ms-label">Semua Sub Program</span>
+                    <span class="ms-arrow"><i class="fas fa-chevron-down"></i></span>
+                </div>
+                <div class="ms-panel">
+                    <div class="ms-panel-header">
+                        <label><input type="checkbox" class="ms-select-all" onchange="toggleAll(this)"> Pilih Semua</label>
+                    </div>
+                    <div class="ms-search"><input type="text" placeholder="Cari sub program..." oninput="searchOptions(this)"></div>
+                    <div class="ms-options">
+                        @foreach($subPrograms as $sp)
+                        @php $isChecked = is_array(request('sub_program_id')) && in_array($sp->id, request('sub_program_id')); @endphp
+                        <label class="ms-option" data-id="{{ $sp->id }}">
+                            <input type="checkbox" name="sub_program_id[]" value="{{ $sp->id }}" {{ $isChecked ? 'checked' : '' }} onchange="updateDropdown(this)">
+                            <span>{{ $sp->nama_sub_program }}</span>
+                            <span class="ms-count">{{ $sp->total }}</span>
+                        </label>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+
+            {{-- Fakultas --}}
+            <div class="ms-dropdown" data-name="fakultas_id" data-label="Fakultas">
+                <div class="ms-trigger" onclick="togglePanel(this)">
+                    <span class="ms-label">Semua Fakultas</span>
+                    <span class="ms-arrow"><i class="fas fa-chevron-down"></i></span>
+                </div>
+                <div class="ms-panel">
+                    <div class="ms-panel-header">
+                        <label><input type="checkbox" class="ms-select-all" onchange="toggleAll(this)"> Pilih Semua</label>
+                    </div>
+                    <div class="ms-search"><input type="text" placeholder="Cari fakultas..." oninput="searchOptions(this)"></div>
+                    <div class="ms-options">
+                        @foreach($fakultas as $f)
+                        @php $isChecked = is_array(request('fakultas_id')) && in_array($f->id, request('fakultas_id')); @endphp
+                        <label class="ms-option" data-id="{{ $f->id }}">
+                            <input type="checkbox" name="fakultas_id[]" value="{{ $f->id }}" {{ $isChecked ? 'checked' : '' }} onchange="updateDropdown(this)">
+                            <span>{{ $f->nama_fakultas }}</span>
+                            <span class="ms-count">{{ $f->total }}</span>
+                        </label>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+
+            {{-- Prodi --}}
+            <div class="ms-dropdown" data-name="prodi_id" data-label="Prodi">
+                <div class="ms-trigger" onclick="togglePanel(this)">
+                    <span class="ms-label">Semua Prodi</span>
+                    <span class="ms-arrow"><i class="fas fa-chevron-down"></i></span>
+                </div>
+                <div class="ms-panel">
+                    <div class="ms-panel-header">
+                        <label><input type="checkbox" class="ms-select-all" onchange="toggleAll(this)"> Pilih Semua</label>
+                    </div>
+                    <div class="ms-search"><input type="text" placeholder="Cari prodi..." oninput="searchOptions(this)"></div>
+                    <div class="ms-options">
+                        @foreach($prodi as $pr)
+                        @php $isChecked = is_array(request('prodi_id')) && in_array($pr->id, request('prodi_id')); @endphp
+                        <label class="ms-option" data-id="{{ $pr->id }}">
+                            <input type="checkbox" name="prodi_id[]" value="{{ $pr->id }}" {{ $isChecked ? 'checked' : '' }} onchange="updateDropdown(this)">
+                            <span>{{ $pr->nama_prodi }}</span>
+                            <span class="ms-count">{{ $pr->total }}</span>
+                        </label>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+
+            {{-- Penyelenggara --}}
+            <div class="ms-dropdown" data-name="penyelenggara" data-label="Penyelenggara">
+                <div class="ms-trigger" onclick="togglePanel(this)">
+                    <span class="ms-label">Semua Penyelenggara</span>
+                    <span class="ms-arrow"><i class="fas fa-chevron-down"></i></span>
+                </div>
+                <div class="ms-panel">
+                    <div class="ms-panel-header">
+                        <label><input type="checkbox" class="ms-select-all" onchange="toggleAll(this)"> Pilih Semua</label>
+                    </div>
+                    <div class="ms-options">
+                        @php
+                            $penyelenggaraValues = (array) request('penyelenggara', []);
+                            $countEksternal = \App\Models\DataPlps::where('penyelenggara', 'Eksternal')->count();
+                            $countInternal = \App\Models\DataPlps::where('penyelenggara', 'Internal')->count();
+                        @endphp
+                        <label class="ms-option" data-id="Eksternal">
+                            <input type="checkbox" name="penyelenggara[]" value="Eksternal" {{ in_array('Eksternal', $penyelenggaraValues) ? 'checked' : '' }} onchange="updateDropdown(this)">
+                            <span>Eksternal</span>
+                            <span class="ms-count">{{ $countEksternal }}</span>
+                        </label>
+                        <label class="ms-option" data-id="Internal">
+                            <input type="checkbox" name="penyelenggara[]" value="Internal" {{ in_array('Internal', $penyelenggaraValues) ? 'checked' : '' }} onchange="updateDropdown(this)">
+                            <span>Internal</span>
+                            <span class="ms-count">{{ $countInternal }}</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Mitra --}}
+            <div class="ms-dropdown" data-name="mitra_id" data-label="Mitra">
+                <div class="ms-trigger" onclick="togglePanel(this)">
+                    <span class="ms-label">Semua Mitra</span>
+                    <span class="ms-arrow"><i class="fas fa-chevron-down"></i></span>
+                </div>
+                <div class="ms-panel">
+                    <div class="ms-panel-header">
+                        <label><input type="checkbox" class="ms-select-all" onchange="toggleAll(this)"> Pilih Semua</label>
+                    </div>
+                    <div class="ms-search"><input type="text" placeholder="Cari mitra..." oninput="searchOptions(this)"></div>
+                    <div class="ms-options">
+                        @foreach($allMitra as $m)
+                        @php $isChecked = is_array(request('mitra_id')) && in_array($m->id, request('mitra_id')); @endphp
+                        <label class="ms-option" data-id="{{ $m->id }}">
+                            <input type="checkbox" name="mitra_id[]" value="{{ $m->id }}" {{ $isChecked ? 'checked' : '' }} onchange="updateDropdown(this)">
+                            <span>{{ $m->nama_mitra }}</span>
+                            <span class="ms-count">{{ $m->total }}</span>
+                        </label>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+
         </div>
 
-        {{-- Error List --}}
-        <div style="
-            overflow-y: auto;
-            padding: 16px 24px;
-            flex: 1;
-        ">
-            <table style="
-                width: 100%;
-                border-collapse: collapse;
-                font-size: 13px;
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            ">
-                <thead>
-                    <tr style="border-bottom: 2px solid #e5e7eb;">
-                        <th style="text-align: left; padding: 8px 12px; color: #6b7280; font-weight: 600; width: 90px;">Baris</th>
-                        <th style="text-align: left; padding: 8px 12px; color: #6b7280; font-weight: 600;">Keterangan Error</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach(session('import_errors') as $error)
-                    @php
-                        // Parse "Baris 5: Penyelenggara tidak valid" → line=5, message=Penyelenggara tidak valid
-                        $parts = explode(': ', $error, 2);
-                        $lineNum = str_replace('Baris ', '', $parts[0] ?? '');
-                        $message = $parts[1] ?? $error;
-                    @endphp
-                    <tr style="border-bottom: 1px solid #f3f4f6;">
-                        <td style="
-                            padding: 10px 12px;
-                            vertical-align: top;
-                        ">
-                            <span style="
-                                background: #fef2f2;
-                                color: #dc2626;
-                                padding: 2px 10px;
-                                border-radius: 12px;
-                                font-weight: 700;
-                                font-size: 12px;
-                                white-space: nowrap;
-                            ">Baris {{ $lineNum }}</span>
-                        </td>
-                        <td style="
-                            padding: 10px 12px;
-                            color: #374151;
-                            line-height: 1.5;
-                        ">{{ $message }}</td>
-                    </tr>
-                    @endforeach
-                </tbody>
-            </table>
-        </div>
+        {{-- Active Filter Tags --}}
+        <div class="filter-tags" id="filterTags"></div>
 
-        {{-- Footer --}}
-        <div style="
-            padding: 14px 24px;
-            border-top: 1px solid #e5e7eb;
-            display: flex;
-            justify-content: flex-end;
-            background: #f9fafb;
-        ">
-            <button onclick="document.getElementById('errorModal').style.display='none'"
-                style="
-                    background: #ef4444;
-                    color: #fff;
-                    border: none;
-                    padding: 8px 20px;
-                    border-radius: 8px;
-                    font-size: 14px;
-                    font-weight: 600;
-                    cursor: pointer;
-                ">Tutup</button>
+        <div class="filter-actions">
+            <a href="/dashboard" class="btn btn-outline"><i class="fas fa-undo"></i> Reset</a>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Terapkan Filter</button>
         </div>
+    </form>
+</div>
+
+<script>
+// === Multi-Select Dropdown Logic ===
+
+function togglePanel(trigger) {
+    const panel = trigger.nextElementSibling;
+    const isOpen = panel.classList.contains('show');
+
+    // Close all other panels first
+    document.querySelectorAll('.ms-panel.show').forEach(p => {
+        p.classList.remove('show');
+        p.closest('.ms-dropdown').querySelector('.ms-trigger').classList.remove('active');
+    });
+
+    if (!isOpen) {
+        panel.classList.add('show');
+        trigger.classList.add('active');
+        // Focus search input if exists
+        const searchInput = panel.querySelector('.ms-search input');
+        if (searchInput) setTimeout(() => searchInput.focus(), 100);
+    }
+}
+
+// Close panels when clicking outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.ms-dropdown')) {
+        document.querySelectorAll('.ms-panel.show').forEach(p => {
+            p.classList.remove('show');
+            p.closest('.ms-dropdown').querySelector('.ms-trigger').classList.remove('active');
+        });
+    }
+});
+
+function toggleAll(selectAllCb) {
+    const panel = selectAllCb.closest('.ms-panel');
+    const checkboxes = panel.querySelectorAll('.ms-options input[type=checkbox]');
+    checkboxes.forEach(cb => {
+        if (!cb.closest('.ms-option').classList.contains('hidden')) {
+            cb.checked = selectAllCb.checked;
+        }
+    });
+    updateDropdown(selectAllCb);
+}
+
+function searchOptions(input) {
+    const panel = input.closest('.ms-panel');
+    const query = input.value.toLowerCase().trim();
+    const options = panel.querySelectorAll('.ms-option');
+    let found = 0;
+    options.forEach(opt => {
+        const text = opt.querySelector('span').textContent.toLowerCase();
+        const match = text.includes(query);
+        opt.classList.toggle('hidden', !match);
+        if (match) found++;
+    });
+    // Show/hide no-result message
+    let noResult = panel.querySelector('.ms-no-result');
+    if (found === 0) {
+        if (!noResult) {
+            noResult = document.createElement('div');
+            noResult.className = 'ms-no-result';
+            noResult.textContent = 'Tidak ditemukan';
+            panel.querySelector('.ms-options').appendChild(noResult);
+        }
+        noResult.style.display = '';
+    } else if (noResult) {
+        noResult.style.display = 'none';
+    }
+    // Update "select all" state
+    updateSelectAllState(panel);
+}
+
+function updateSelectAllState(panel) {
+    const selectAll = panel.querySelector('.ms-select-all');
+    if (!selectAll) return;
+    const visible = panel.querySelectorAll('.ms-option:not(.hidden) input[type=checkbox]');
+    const checked = panel.querySelectorAll('.ms-option:not(.hidden) input[type=checkbox]:checked');
+    selectAll.checked = visible.length > 0 && visible.length === checked.length;
+    selectAll.indeterminate = checked.length > 0 && checked.length < visible.length;
+}
+
+function updateDropdown(changedCb) {
+    const dropdown = changedCb.closest('.ms-dropdown');
+    const panel = dropdown.querySelector('.ms-panel');
+    const trigger = dropdown.querySelector('.ms-trigger');
+    const label = trigger.querySelector('.ms-label');
+    const dataLabel = dropdown.dataset.label;
+    // Count only visible (not unavailable or at least available) checkboxes
+    const allCbs = panel.querySelectorAll('.ms-options input[type=checkbox]');
+    const checked = panel.querySelectorAll('.ms-options input[type=checkbox]:checked');
+    const visibleCbs = panel.querySelectorAll('.ms-option:not(.unavailable) input[type=checkbox]');
+
+    // Remove old badge
+    const oldBadge = trigger.querySelector('.ms-badge');
+    if (oldBadge) oldBadge.remove();
+
+    if (checked.length === 0 || (checked.length === visibleCbs.length && visibleCbs.length === allCbs.length)) {
+        label.textContent = 'Semua ' + dataLabel;
+        trigger.classList.remove('has-selection');
+        // If "all" selected, uncheck all (treat as no filter)
+        if (checked.length === allCbs.length && allCbs.length > 0) {
+            allCbs.forEach(cb => cb.checked = false);
+            label.textContent = 'Semua ' + dataLabel;
+        }
+    } else if (checked.length === 1) {
+        label.textContent = checked[0].closest('.ms-option').querySelector('span').textContent;
+        trigger.classList.add('has-selection');
+    } else {
+        label.textContent = dataLabel;
+        trigger.classList.add('has-selection');
+        const badge = document.createElement('span');
+        badge.className = 'ms-badge';
+        badge.textContent = checked.length;
+        trigger.insertBefore(badge, trigger.querySelector('.ms-arrow'));
+    }
+
+    updateSelectAllState(panel);
+    updateFilterTags();
+
+    // Trigger cascading filter update via AJAX
+    fetchFilterOptions();
+}
+
+function updateFilterTags() {
+    const container = document.getElementById('filterTags');
+    container.innerHTML = '';
+
+    document.querySelectorAll('.ms-dropdown').forEach(dropdown => {
+        const dataLabel = dropdown.dataset.label;
+        const checked = dropdown.querySelectorAll('.ms-options input[type=checkbox]:checked');
+
+        checked.forEach(cb => {
+            const name = cb.closest('.ms-option').querySelector('span').textContent;
+            const tag = document.createElement('div');
+            tag.className = 'filter-tag';
+            tag.innerHTML = `<i class="fas fa-filter"></i> <strong>${dataLabel}:</strong> ${name} <span class="tag-remove" title="Hapus filter" data-cb-id="${cb.name}-${cb.value}">&times;</span>`;
+            tag.querySelector('.tag-remove').addEventListener('click', function(e) {
+                e.preventDefault();
+                cb.checked = false;
+                updateDropdown(cb);
+            });
+            container.appendChild(tag);
+        });
+    });
+}
+
+// === Cascading Filter AJAX Logic ===
+let filterFetchTimer = null;
+let filterAbortController = null;
+
+function getActiveFilters() {
+    const filters = {};
+    document.querySelectorAll('.ms-dropdown').forEach(dropdown => {
+        const name = dropdown.dataset.name;
+        const checked = dropdown.querySelectorAll('.ms-options input[type=checkbox]:checked');
+        if (checked.length > 0) {
+            filters[name] = Array.from(checked).map(cb => cb.value);
+        }
+    });
+    return filters;
+}
+
+function fetchFilterOptions() {
+    // Debounce: wait 200ms before fetching
+    if (filterFetchTimer) clearTimeout(filterFetchTimer);
+    if (filterAbortController) filterAbortController.abort();
+
+    filterFetchTimer = setTimeout(() => {
+        const filters = getActiveFilters();
+        const hasAnyFilter = Object.keys(filters).length > 0;
+
+        // If no filter is active, reset all dropdowns to show all options
+        if (!hasAnyFilter) {
+            document.querySelectorAll('.ms-dropdown').forEach(dropdown => {
+                dropdown.classList.remove('filter-loading');
+                dropdown.querySelectorAll('.ms-option').forEach(opt => {
+                    opt.classList.remove('unavailable');
+                });
+            });
+            return;
+        }
+
+        // Build query string
+        const params = new URLSearchParams();
+        for (const [key, values] of Object.entries(filters)) {
+            values.forEach(v => params.append(key + '[]', v));
+        }
+
+        // Show loading state on all dropdowns
+        document.querySelectorAll('.ms-dropdown').forEach(d => d.classList.add('filter-loading'));
+
+        filterAbortController = new AbortController();
+
+        fetch('/api/filter-options?' + params.toString(), {
+            headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            },
+            signal: filterAbortController.signal
+        })
+        .then(res => res.json())
+        .then(data => {
+            // Update each dropdown with new options
+            document.querySelectorAll('.ms-dropdown').forEach(dropdown => {
+                const filterName = dropdown.dataset.name;
+                const options = data[filterName];
+                if (!options) return;
+
+                // Build a map of id -> total from the API response
+                const availableMap = {};
+                options.forEach(opt => {
+                    availableMap[String(opt.id)] = opt.total;
+                });
+
+                // Update each option in this dropdown
+                dropdown.querySelectorAll('.ms-option').forEach(optEl => {
+                    const optId = String(optEl.dataset.id);
+                    const countEl = optEl.querySelector('.ms-count');
+                    const cb = optEl.querySelector('input[type=checkbox]');
+
+                    if (availableMap.hasOwnProperty(optId)) {
+                        // Option is available
+                        optEl.classList.remove('unavailable');
+                        if (cb) cb.disabled = false;
+                        if (countEl) countEl.textContent = availableMap[optId];
+                    } else {
+                        // Option is NOT available — disable it completely
+                        optEl.classList.add('unavailable');
+                        if (cb) {
+                            cb.checked = false;
+                            cb.disabled = true;
+                        }
+                        if (countEl) countEl.textContent = '0';
+                    }
+                });
+
+                // Update select-all state
+                const panel = dropdown.querySelector('.ms-panel');
+                if (panel) updateSelectAllState(panel);
+
+                dropdown.classList.remove('filter-loading');
+            });
+        })
+        .catch(err => {
+            if (err.name !== 'AbortError') {
+                console.error('Filter fetch error:', err);
+            }
+            document.querySelectorAll('.ms-dropdown').forEach(d => d.classList.remove('filter-loading'));
+        });
+    }, 200);
+}
+
+// Initialize all dropdowns on page load
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.ms-dropdown').forEach(dropdown => {
+        const firstCb = dropdown.querySelector('.ms-options input[type=checkbox]');
+        if (firstCb) {
+            // Initialize visual state without triggering AJAX
+            const panel = dropdown.querySelector('.ms-panel');
+            const trigger = dropdown.querySelector('.ms-trigger');
+            const label = trigger.querySelector('.ms-label');
+            const dataLabel = dropdown.dataset.label;
+            const checked = panel.querySelectorAll('.ms-options input[type=checkbox]:checked');
+            const total = panel.querySelectorAll('.ms-options input[type=checkbox]');
+
+            const oldBadge = trigger.querySelector('.ms-badge');
+            if (oldBadge) oldBadge.remove();
+
+            if (checked.length === 0) {
+                label.textContent = 'Semua ' + dataLabel;
+                trigger.classList.remove('has-selection');
+            } else if (checked.length === 1) {
+                label.textContent = checked[0].closest('.ms-option').querySelector('span').textContent;
+                trigger.classList.add('has-selection');
+            } else {
+                label.textContent = dataLabel;
+                trigger.classList.add('has-selection');
+                const badge = document.createElement('span');
+                badge.className = 'ms-badge';
+                badge.textContent = checked.length;
+                trigger.insertBefore(badge, trigger.querySelector('.ms-arrow'));
+            }
+
+            updateSelectAllState(panel);
+        }
+    });
+
+    // Update filter tags
+    updateFilterTags();
+
+    // If there are active filters on page load, fetch cascading options
+    const activeFilters = getActiveFilters();
+    if (Object.keys(activeFilters).length > 0) {
+        fetchFilterOptions();
+    }
+});
+</script>
+
+{{-- SUMMARY CARDS --}}
+<div class="summary-grid">
+    <div class="summary-card">
+        <div class="summary-icon" style="background:#fef2f2;color:#dc2626"><i class="fas fa-user-graduate"></i></div>
+        <div><div class="value">{{ number_format($totalMahasiswa) }}</div><div class="label">Total Mahasiswa PLPS</div></div>
+    </div>
+    <div class="summary-card">
+        <div class="summary-icon" style="background:#eff6ff;color:#2563eb"><i class="fas fa-building"></i></div>
+        <div><div class="value">{{ number_format($totalMitra) }}</div><div class="label">Total Mitra</div></div>
+    </div>
+    <div class="summary-card">
+        <div class="summary-icon" style="background:#f0fdf4;color:#16a34a"><i class="fas fa-folder-open"></i></div>
+        <div><div class="value">{{ number_format($totalProgram) }}</div><div class="label">Total Program</div></div>
+    </div>
+    <div class="summary-card">
+        <div class="summary-icon" style="background:#fefce8;color:#ca8a04"><i class="fas fa-layer-group"></i></div>
+        <div><div class="value">{{ number_format($totalSubProgram) }}</div><div class="label">Total Sub Program</div></div>
     </div>
 </div>
-@endif
 
-{{-- Fallback: error biasa (bukan dari import) --}}
-@if(session('error') && !session('import_errors'))
-<div style="color:red;">
-    {!! nl2br(session('error')) !!}
+{{-- CHARTS ROW --}}
+<div class="chart-row">
+    <div class="card">
+        <div class="chart-title"><i class="fas fa-chart-bar" style="color:#7B1113"></i> Mahasiswa per Fakultas</div>
+        <canvas id="chartFakultas" height="280"></canvas>
+    </div>
+    <div class="card">
+        <div class="chart-title"><i class="fas fa-chart-bar" style="color:#7B1113"></i> Top 7 Prodi Terbanyak</div>
+        <canvas id="chartProdi" height="280"></canvas>
+    </div>
 </div>
-@endif
+
+{{-- MITRA RANKING --}}
+<div class="card">
+    <div class="chart-title"><i class="fas fa-trophy" style="color:#ca8a04"></i> Instansi Mitra Teratas</div>
+    @if($topMitraData->isEmpty())
+        <p style="color:#94a3b8;text-align:center;padding:20px">Tidak ada data mitra</p>
+    @else
+    <ul class="mitra-list">
+        @foreach($topMitraData as $i => $mt)
+        <li class="mitra-item">
+            <div class="mitra-rank">{{ $i+1 }}</div>
+            <div class="mitra-name">{{ $mt->nama_mitra }}</div>
+            <div class="mitra-count">{{ number_format($mt->total) }} Mhs</div>
+        </li>
+        @endforeach
+    </ul>
+    @endif
+</div>
+
+{{-- TREN PER SEMESTER --}}
+<div class="card">
+    <div class="chart-title"><i class="fas fa-chart-line" style="color:#7B1113"></i> Grafik Per Semester</div>
+    <canvas id="chartTren" height="120"></canvas>
+</div>
+
+{{-- DATA MAHASISWA MBKM TABLE --}}
+<div class="card" id="tableCard">
+    <div class="chart-title"><i class="fas fa-table" style="color:#7B1113"></i> Data Mahasiswa MBKM</div>
+    <div class="search-bar" id="tableSearchBar">
+        <input type="text" id="searchNama" placeholder="Cari Nama Mahasiswa..." value="{{ request('search_nama') }}">
+        <input type="text" id="searchNim" placeholder="Cari NIM..." value="{{ request('search_nim') }}">
+        <button type="button" class="btn btn-primary" onclick="resetAndLoadTable()"><i class="fas fa-search"></i> Cari</button>
+    </div>
+
+    <div class="table-wrap" id="tableWrap">
+        <table class="data-table" id="lazyTable">
+            <thead>
+                <tr>
+                    <th>No</th><th>Program</th><th>Sub Program</th><th>Fakultas</th><th>Program Studi</th>
+                    <th>Nama Mahasiswa</th><th>NIM</th><th>Kegiatan</th><th>Mitra</th><th>Penyelenggara</th>
+                    <th>Semester</th><th>Tahun Ajaran</th>
+                    <th>Dosen Pembimbing</th><th>Jumlah Konversi SKS</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+            </tbody>
+        </table>
+        <div class="scroll-sentinel" id="scrollSentinel"></div>
+    </div>
+    <div class="table-info" id="tableInfo" style="display:none">
+        <span>Menampilkan <span class="count" id="tableShown">0</span> dari <span class="count" id="tableTotal">0</span> data</span>
+        <span id="tablePageInfo"></span>
+    </div>
+    <div class="table-status" id="tableStatus"><i class="fas fa-spinner fa-spin"></i> Memuat data...</div>
+</div>
+
+<script>
+// === Lazy Loading Table ===
+let tablePage = 1;
+let tableLastPage = 1;
+let tableLoading = false;
+let tableTotal = 0;
+let tableLoadedCount = 0;
+let tableAbortController = null;
+
+function getTableFilters() {
+    const params = new URLSearchParams();
+    // Get active filters from dropdowns
+    document.querySelectorAll('.ms-dropdown').forEach(dropdown => {
+        const name = dropdown.dataset.name;
+        const checked = dropdown.querySelectorAll('.ms-options input[type=checkbox]:checked');
+        checked.forEach(cb => params.append(name + '[]', cb.value));
+    });
+    // Get search inputs
+    const searchNama = document.getElementById('searchNama').value.trim();
+    const searchNim = document.getElementById('searchNim').value.trim();
+    if (searchNama) params.set('search_nama', searchNama);
+    if (searchNim) params.set('search_nim', searchNim);
+    return params;
+}
+
+function loadTablePage(page) {
+    if (tableLoading || page > tableLastPage) return;
+    tableLoading = true;
+
+    const statusEl = document.getElementById('tableStatus');
+    if (page === 1) {
+        statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memuat data...';
+        statusEl.style.display = '';
+    } else {
+        // Show skeleton rows for loading more
+        showSkeletonRows();
+    }
+
+    if (tableAbortController) tableAbortController.abort();
+    tableAbortController = new AbortController();
+
+    const params = getTableFilters();
+    params.set('page', page);
+
+    fetch('/api/table-data?' + params.toString(), {
+        headers: {
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+        },
+        signal: tableAbortController.signal
+    })
+    .then(res => res.json())
+    .then(data => {
+        const tbody = document.getElementById('tableBody');
+
+        // Remove skeleton rows
+        tbody.querySelectorAll('.skeleton-row').forEach(r => r.remove());
+
+        if (page === 1) {
+            tbody.innerHTML = '';
+            tableLoadedCount = 0;
+        }
+
+        if (data.data.length === 0 && page === 1) {
+            tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:30px;color:#94a3b8">Tidak ada data yang sesuai</td></tr>';
+            statusEl.style.display = 'none';
+            document.getElementById('tableInfo').style.display = 'none';
+            tableLoading = false;
+            return;
+        }
+
+        data.data.forEach(row => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${row.no}</td>
+                <td>${esc(row.program)}</td>
+                <td>${esc(row.sub_program)}</td>
+                <td>${esc(row.fakultas)}</td>
+                <td>${esc(row.prodi)}</td>
+                <td>${esc(row.nama)}</td>
+                <td>${esc(row.nim)}</td>
+                <td>${esc(row.kegiatan)}</td>
+                <td>${esc(row.mitra)}</td>
+                <td>${esc(row.penyelenggara)}</td>
+                <td>${esc(row.semester)}</td>
+                <td>${esc(row.tahun_ajaran)}</td>
+                <td>${esc(row.dosen_pembimbing)}</td>
+                <td>${row.sks}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        tableLoadedCount += data.data.length;
+        tablePage = data.current_page;
+        tableLastPage = data.last_page;
+        tableTotal = data.total;
+
+        // Update info bar
+        const infoEl = document.getElementById('tableInfo');
+        infoEl.style.display = 'flex';
+        document.getElementById('tableShown').textContent = tableLoadedCount.toLocaleString();
+        document.getElementById('tableTotal').textContent = tableTotal.toLocaleString();
+        document.getElementById('tablePageInfo').textContent = tablePage < tableLastPage ? 'Scroll ke bawah untuk memuat lebih banyak...' : '';
+
+        // Update status
+        if (tablePage >= tableLastPage) {
+            if (tableTotal > 0) {
+                statusEl.innerHTML = '<i class="fas fa-check-circle" style="color:#16a34a"></i> Semua data sudah ditampilkan';
+                statusEl.style.display = '';
+                setTimeout(() => { statusEl.style.display = 'none'; }, 2000);
+            } else {
+                statusEl.style.display = 'none';
+            }
+        } else {
+            statusEl.style.display = 'none';
+        }
+
+        tableLoading = false;
+    })
+    .catch(err => {
+        if (err.name !== 'AbortError') {
+            console.error('Table fetch error:', err);
+            document.getElementById('tableStatus').innerHTML = '<i class="fas fa-exclamation-circle" style="color:#dc2626"></i> Gagal memuat data';
+        }
+        tableLoading = false;
+    });
+}
+
+function showSkeletonRows() {
+    const tbody = document.getElementById('tableBody');
+    for (let i = 0; i < 5; i++) {
+        const tr = document.createElement('tr');
+        tr.className = 'skeleton-row';
+        let cells = '';
+        for (let j = 0; j < 14; j++) {
+            const w = 40 + Math.random() * 60;
+            cells += `<td><div class="skeleton-bar" style="width:${w}%"></div></td>`;
+        }
+        tr.innerHTML = cells;
+        tbody.appendChild(tr);
+    }
+}
+
+function resetAndLoadTable() {
+    tablePage = 1;
+    tableLastPage = 1;
+    tableLoadedCount = 0;
+    loadTablePage(1);
+}
+
+function esc(str) {
+    if (str === null || str === undefined) return '-';
+    const div = document.createElement('div');
+    div.textContent = String(str);
+    return div.innerHTML;
+}
+
+// Intersection Observer for infinite scroll
+const sentinel = document.getElementById('scrollSentinel');
+if (sentinel) {
+    const observer = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && !tableLoading && tablePage < tableLastPage) {
+            loadTablePage(tablePage + 1);
+        }
+    }, {
+        root: document.getElementById('tableWrap'),
+        rootMargin: '200px'
+    });
+    observer.observe(sentinel);
+}
+
+// Search on Enter key
+document.getElementById('searchNama')?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); resetAndLoadTable(); } });
+document.getElementById('searchNim')?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); resetAndLoadTable(); } });
+
+// Load first page on DOM ready
+document.addEventListener('DOMContentLoaded', function() {
+    // Small delay to let filters initialize first
+    setTimeout(() => loadTablePage(1), 100);
+});
+</script>
+
+{{-- CHART.JS SCRIPTS --}}
+<script>
+// Color map for fakultas
+const fakultasColors = {
+    'FTE':'#005A98','FIF':'#D3B048','FEB':'#31BAAD','FRI':'#109344',
+    'FKS':'#673DB0','FIK':'#DF4B11','FIT':'#00FF66'
+};
+function getFakColor(name) {
+    return fakultasColors[name.toUpperCase()] || '#9ca3af';
+}
+
+// 1. Mahasiswa per Fakultas (Bar)
+const fakLabels = @json($mahasiswaPerFakultas->pluck('nama_fakultas'));
+const fakData = @json($mahasiswaPerFakultas->pluck('total'));
+new Chart(document.getElementById('chartFakultas'), {
+    type: 'bar',
+    data: {
+        labels: fakLabels,
+        datasets: [{
+            label: 'Mahasiswa',
+            data: fakData,
+            backgroundColor: fakLabels.map(n => getFakColor(n)),
+            borderRadius: 6,
+            maxBarThickness: 48
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: ctx => ctx.parsed.y.toLocaleString() + ' Mahasiswa' }}
+        },
+        scales: {
+            y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#f1f5f9' }},
+            x: { grid: { display: false }}
+        }
+    }
+});
+
+// 2. Top 7 Prodi (Horizontal Bar with gradient opacity)
+const prodiLabels = @json($topProdi->pluck('nama_prodi'));
+const prodiData = @json($topProdi->pluck('total'));
+const prodiColors = prodiLabels.map((_, i) => {
+    const opacity = 1 - (i * 0.1);
+    return `rgba(123,17,19,${Math.max(opacity, 0.3)})`;
+});
+new Chart(document.getElementById('chartProdi'), {
+    type: 'bar',
+    data: {
+        labels: prodiLabels,
+        datasets: [{
+            label: 'Mahasiswa',
+            data: prodiData,
+            backgroundColor: prodiColors,
+            borderRadius: 6,
+            maxBarThickness: 32
+        }]
+    },
+    options: {
+        indexAxis: 'y',
+        responsive: true,
+        plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: ctx => ctx.parsed.x.toLocaleString() + ' Mahasiswa' }}
+        },
+        scales: {
+            x: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#f1f5f9' }},
+            y: { grid: { display: false }}
+        }
+    }
+});
+
+// 3. Tren Per Semester (Line)
+const trenLabels = @json($semesters);
+const trenSeries = @json($trenSeries);
+const trenDatasets = trenSeries.map(s => ({
+    label: s.label,
+    data: s.data,
+    borderColor: getFakColor(s.label),
+    backgroundColor: getFakColor(s.label),
+    tension: 0.3,
+    borderWidth: 2.5,
+    pointRadius: 4,
+    pointHoverRadius: 6,
+    fill: false
+}));
+new Chart(document.getElementById('chartTren'), {
+    type: 'line',
+    data: { labels: trenLabels, datasets: trenDatasets },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { position: 'top', labels: { usePointStyle: true, padding: 16, font: { size: 11 }}},
+            tooltip: { mode: 'index', intersect: false }
+        },
+        scales: {
+            y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#f1f5f9' }},
+            x: { grid: { display: false }}
+        },
+        interaction: { mode: 'nearest', axis: 'x', intersect: false }
+    }
+});
+</script>
+
+@endif {{-- end hasData --}}
+
+@endsection
