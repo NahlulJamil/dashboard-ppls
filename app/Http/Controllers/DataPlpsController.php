@@ -134,8 +134,31 @@ class DataPlpsController extends Controller
             ->limit(5)
             ->get();
 
-        // === TOP 5 MITRA ===
-        $topMitraData = $this->chartQuery($request)
+        // === DISTRIBUSI PROGRAM ===
+        $distribusiProgram = $this->chartQuery($request)
+            ->join('programs', 'data_plps.program_id', '=', 'programs.id')
+            ->select('programs.nama_program', DB::raw('COUNT(DISTINCT data_plps.nim) as total'))
+            ->groupBy('programs.nama_program')
+            ->orderByDesc('total')
+            ->get();
+
+        // === TOTAL MITRA INTERNAL/EKSTERNAL ===
+        $totalMitraEksternal = (clone $baseQuery)->where('penyelenggara', 'Eksternal')->distinct()->count('mitra_id');
+        $totalMitraInternal = (clone $baseQuery)->where('penyelenggara', 'Internal')->distinct()->count('mitra_id');
+
+        // === TOP 5 MITRA EKSTERNAL ===
+        $topMitraEksternal = $this->chartQuery($request)
+            ->where('penyelenggara', 'Eksternal')
+            ->join('mitras', 'data_plps.mitra_id', '=', 'mitras.id')
+            ->select('mitras.nama_mitra', DB::raw('COUNT(DISTINCT data_plps.nim) as total'))
+            ->groupBy('mitras.nama_mitra', 'mitras.id')
+            ->orderByDesc('total')
+            ->limit(5)
+            ->get();
+
+        // === TOP 5 MITRA INTERNAL ===
+        $topMitraInternal = $this->chartQuery($request)
+            ->where('penyelenggara', 'Internal')
             ->join('mitras', 'data_plps.mitra_id', '=', 'mitras.id')
             ->select('mitras.nama_mitra', DB::raw('COUNT(DISTINCT data_plps.nim) as total'))
             ->groupBy('mitras.nama_mitra', 'mitras.id')
@@ -182,7 +205,11 @@ class DataPlpsController extends Controller
             'mahasiswaPerFakultas',
             'topProdi',
             'topProgram',
-            'topMitraData',
+            'distribusiProgram',
+            'totalMitraEksternal',
+            'totalMitraInternal',
+            'topMitraEksternal',
+            'topMitraInternal',
             'semesters',
             'trenSeries',
             'isAdmin'
@@ -224,6 +251,7 @@ class DataPlpsController extends Controller
                 'mitra' => $row->mitra->nama_mitra ?? '-',
                 'penyelenggara' => $row->penyelenggara,
                 'semester' => $row->semester,
+                'semester_ta' => $row->semester_ta,
                 'tahun_ajaran' => $row->tahun_ajaran,
                 'dosen_pembimbing' => $row->dosen_pembimbing ?? '-',
                 'sks' => $row->sks,
@@ -576,6 +604,113 @@ class DataPlpsController extends Controller
     }
 
     /**
+     * Export data to Excel based on filters.
+     */
+    public function exportExcel(Request $request)
+    {
+        $query = DataPlps::query();
+        $this->applyEloquentFilters($query, $request);
+        $query->with(['program', 'subProgram', 'mahasiswa.prodi.fakultas', 'kegiatan', 'mitra']);
+        
+        return Excel::download(new \App\Exports\DataPlpsExport($query), 'data_mahasiswa_mbkm.xlsx');
+    }
+
+    /**
+     * Export data to PDF (HTML view printable) based on filters.
+     */
+    public function exportPdf(Request $request)
+    {
+        // Re-use logic from index() to get chart data for PDF
+        $baseQuery = $this->chartQuery($request);
+        
+        $totalMahasiswa = (clone $baseQuery)->distinct()->count('data_plps.nim');
+        $totalProgram = (clone $baseQuery)->distinct()->count('data_plps.program_id');
+        $totalMitraEksternal = (clone $baseQuery)->where('penyelenggara', 'Eksternal')->distinct()->count('mitra_id');
+        $totalMitraInternal = (clone $baseQuery)->where('penyelenggara', 'Internal')->distinct()->count('mitra_id');
+
+        $topMitraEksternal = $this->chartQuery($request)
+            ->where('penyelenggara', 'Eksternal')
+            ->join('mitras', 'data_plps.mitra_id', '=', 'mitras.id')
+            ->select('mitras.nama_mitra', DB::raw('COUNT(DISTINCT data_plps.nim) as total'))
+            ->groupBy('mitras.nama_mitra', 'mitras.id')
+            ->orderByDesc('total')
+            ->limit(5)
+            ->get();
+
+        $topMitraInternal = $this->chartQuery($request)
+            ->where('penyelenggara', 'Internal')
+            ->join('mitras', 'data_plps.mitra_id', '=', 'mitras.id')
+            ->select('mitras.nama_mitra', DB::raw('COUNT(DISTINCT data_plps.nim) as total'))
+            ->groupBy('mitras.nama_mitra', 'mitras.id')
+            ->orderByDesc('total')
+            ->limit(5)
+            ->get();
+
+        $mahasiswaPerFakultas = $this->chartQuery($request)
+            ->select('fakultas.nama_fakultas', DB::raw('COUNT(DISTINCT data_plps.nim) as total'))
+            ->groupBy('fakultas.nama_fakultas')
+            ->orderByDesc('total')
+            ->get();
+            
+        // Group remaining as "TUP, TUS, FKS, dll." if more than 8
+        $top8Fakultas = $mahasiswaPerFakultas->take(8);
+        if ($mahasiswaPerFakultas->count() > 8) {
+            $otherTotal = $mahasiswaPerFakultas->slice(8)->sum('total');
+            $top8Fakultas->push((object)['nama_fakultas' => 'TUP, TUS, FKS, dll.', 'total' => $otherTotal]);
+        }
+        $mahasiswaPerFakultas = $top8Fakultas;
+
+        $topProdi = $this->chartQuery($request)
+            ->select('prodis.nama_prodi', DB::raw('COUNT(DISTINCT data_plps.nim) as total'))
+            ->groupBy('prodis.nama_prodi')
+            ->orderByDesc('total')
+            ->limit(8)
+            ->get();
+
+        $distribusiProgram = $this->chartQuery($request)
+            ->join('programs', 'data_plps.program_id', '=', 'programs.id')
+            ->select('programs.nama_program', DB::raw('COUNT(DISTINCT data_plps.nim) as total'))
+            ->groupBy('programs.nama_program')
+            ->orderByDesc('total')
+            ->get();
+
+        // Bidang kerja magang
+        $magangData = $this->chartQuery($request)
+            ->join('programs', 'data_plps.program_id', '=', 'programs.id')
+            ->join('kegiatans', 'data_plps.kegiatan_id', '=', 'kegiatans.id')
+            ->whereRaw('LOWER(programs.nama_program) LIKE ?', ['%magang%'])
+            ->select('kegiatans.nama_kegiatan', DB::raw('COUNT(DISTINCT data_plps.nim) as total'))
+            ->groupBy('kegiatans.nama_kegiatan')
+            ->orderByDesc('total')
+            ->get();
+            
+        $totalMagang = $magangData->sum('total');
+        // Group top 10, rest as "Lainnya"
+        $topMagang = $magangData->take(10);
+        if ($magangData->count() > 10) {
+            $otherMagang = $magangData->slice(10)->sum('total');
+            $topMagang->push((object)['nama_kegiatan' => 'Lainnya / Tidak Terklasifikasi', 'total' => $otherMagang]);
+        }
+
+        $exporterName = auth()->guard('admin')->check() 
+            ? (auth()->guard('admin')->user()->username ?? auth()->guard('admin')->user()->name)
+            : 'Guest';
+
+        $isFirstLoad = !$request->has('program_id') && !$request->has('sub_program_id') && !$request->has('fakultas_id') && !$request->has('prodi_id') && !$request->has('penyelenggara') && !$request->has('mitra_id') && !$request->has('semester_ta') && !$request->has('tahun_ajaran');
+        $activeSemesterTa = (array)$request->semester_ta;
+        
+        if ($isFirstLoad && empty($activeSemesterTa)) {
+            $activeSemesterTa = DataPlps::select('semester_ta')->distinct()->orderBy('semester_ta', 'desc')->limit(5)->pluck('semester_ta')->toArray();
+        }
+
+        return view('export-pdf', compact(
+            'totalMahasiswa', 'totalProgram', 'totalMitraEksternal', 'totalMitraInternal',
+            'topMitraEksternal', 'topMitraInternal', 'mahasiswaPerFakultas', 'topProdi',
+            'distribusiProgram', 'topMagang', 'totalMagang', 'exporterName', 'activeSemesterTa'
+        ));
+    }
+
+    /**
      * API: Update a single DataPlps row (inline edit from dashboard table).
      */
     public function updateRow(Request $request, $id)
@@ -587,26 +722,51 @@ class DataPlpsController extends Controller
             'mitra_nama' => 'nullable|string',
             'penyelenggara' => 'sometimes|in:Eksternal,Internal',
             'semester' => 'sometimes|in:GANJIL,GENAP',
-            'tahun_ajaran' => 'sometimes|string',
+            'semester_ta' => ['sometimes', 'string', 'regex:/^\d{4}\/\d{4} S\d$/'],
+            'tahun_ajaran' => ['sometimes', 'string', 'regex:/^\d{4}\/\d{4}$/'],
             'dosen_pembimbing' => 'nullable|string',
             'sks' => 'sometimes|integer|min:0',
+        ], [
+            'semester_ta.regex' => 'Format Semester TA harus seperti "2022/2023 S2"',
+            'tahun_ajaran.regex' => 'Format Tahun Ajaran harus seperti "2022/2023"',
         ]);
 
         $updateData = [];
         if (isset($validated['penyelenggara'])) $updateData['penyelenggara'] = $validated['penyelenggara'];
         if (isset($validated['semester'])) $updateData['semester'] = $validated['semester'];
+        if (isset($validated['semester_ta'])) $updateData['semester_ta'] = $validated['semester_ta'];
         if (isset($validated['tahun_ajaran'])) $updateData['tahun_ajaran'] = $validated['tahun_ajaran'];
         if (array_key_exists('dosen_pembimbing', $validated)) $updateData['dosen_pembimbing'] = $validated['dosen_pembimbing'];
         if (isset($validated['sks'])) $updateData['sks'] = $validated['sks'];
 
         if (!empty($validated['kegiatan_nama'])) {
-            $kegiatan = \App\Models\Kegiatan::firstOrCreate(['nama_kegiatan' => $validated['kegiatan_nama']]);
+            $kegiatan = $this->fuzzyFirstOrCreate(\App\Models\Kegiatan::class, 'nama_kegiatan', $validated['kegiatan_nama']);
             $updateData['kegiatan_id'] = $kegiatan->id;
         }
 
         if (!empty($validated['mitra_nama'])) {
-            $mitra = \App\Models\Mitra::firstOrCreate(['nama_mitra' => $validated['mitra_nama']]);
+            $mitra = $this->fuzzyFirstOrCreate(\App\Models\Mitra::class, 'nama_mitra', $validated['mitra_nama']);
             $updateData['mitra_id'] = $mitra->id;
+        }
+
+        // Validate uniqueness if semester/tahun_ajaran is being changed
+        $checkSemester = $updateData['semester'] ?? $data->semester;
+        $checkTahunAjaran = $updateData['tahun_ajaran'] ?? $data->tahun_ajaran;
+        
+        $exists = \App\Models\DataPlps::where('nim', $data->nim)
+            ->where('program_id', $data->program_id)
+            ->where('semester', $checkSemester)
+            ->where('tahun_ajaran', $checkTahunAjaran)
+            ->where('id', '!=', $id)
+            ->exists();
+
+        if ($exists) {
+            return response()->json([
+                'message' => 'The given data was invalid.',
+                'errors' => [
+                    'semester' => ["Data duplikat (NIM: {$data->nim}, Semester: {$checkSemester}, TA: {$checkTahunAjaran}) sudah ada."]
+                ]
+            ], 422);
         }
 
         $data->update($updateData);
@@ -638,5 +798,43 @@ class DataPlpsController extends Controller
             'message' => "{$count} data berhasil dihapus",
             'deleted_count' => $count,
         ]);
+    }
+
+    /**
+     * Fuzzy firstOrCreate for dynamic data (Mitra, Kegiatan) during edit.
+     */
+    private function fuzzyFirstOrCreate(string $modelClass, string $column, string $value, float $threshold = 80.0)
+    {
+        $value = preg_replace('/\s+/', ' ', trim($value));
+        if (empty($value)) return null;
+
+        $lowerValue = mb_strtolower($value);
+
+        // 1. Exact match (case-insensitive)
+        $exact = $modelClass::whereRaw("LOWER({$column}) = ?", [$lowerValue])->first();
+        if ($exact) return $exact;
+
+        // 2. Fuzzy match - check all existing records
+        $allRecords = $modelClass::all();
+        foreach ($allRecords as $record) {
+            $existingValue = $record->$column;
+            similar_text($lowerValue, mb_strtolower($existingValue), $percent);
+
+            if ($percent >= $threshold) {
+                // Return 422 if typo detected
+                abort(response()->json([
+                    'message' => 'The given data was invalid.',
+                    'errors' => [
+                        $column === 'nama_mitra' ? 'mitra_nama' : 'kegiatan_nama' => [
+                            "Kemungkinan typo: \"{$value}\" mirip dengan \"{$existingValue}\" " .
+                            "({$percent}% kemiripan). Gunakan nama yang sudah ada atau perbaiki ejaan."
+                        ]
+                    ]
+                ], 422));
+            }
+        }
+
+        // 3. Create new
+        return $modelClass::create([$column => $value]);
     }
 }

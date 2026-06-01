@@ -69,10 +69,11 @@
     .mitra-name{flex:1;font-size:14px;font-weight:500}
     .mitra-count{font-size:14px;font-weight:700;color:#7B1113}
     /* Table */
-    .data-table{width:100%;border-collapse:collapse;font-size:13px}
-    .data-table thead{background:linear-gradient(135deg,#7B1113,#A41E1E);color:#fff}
-    .data-table th{padding:12px 14px;text-align:left;font-weight:600;white-space:nowrap}
-    .data-table td{padding:10px 14px;border-bottom:1px solid #f1f5f9;white-space:nowrap}
+    .data-table{width:100%;border-collapse:separate;border-spacing:0;font-size:13px}
+    .data-table thead{color:#fff}
+    .data-table th{padding:12px 14px;text-align:left;font-weight:600;white-space:nowrap;vertical-align:middle;height:48px;border-bottom:1px solid #7B1113}
+    .data-table td{padding:10px 14px;border-bottom:1px solid #f1f5f9;white-space:nowrap;vertical-align:middle;height:48px}
+    .data-table input[type="checkbox"]{margin:0;vertical-align:middle;cursor:pointer}
     .data-table tbody tr:hover{background:#fef2f2}
     .search-bar{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}
     .search-bar input{padding:9px 14px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit;min-width:220px}
@@ -89,7 +90,7 @@
     .skeleton-bar{height:14px;background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%);background-size:200% 100%;border-radius:4px;animation:shimmer 1.5s infinite}
     @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
     .scroll-sentinel{height:1px}
-    .data-table thead th{position:sticky;top:0;z-index:2}
+    .data-table thead th{position:sticky;top:0;z-index:2;background:#7B1113}
     /* Empty */
     .empty-state{text-align:center;padding:80px 20px;color:#94a3b8}
     .empty-state i{font-size:56px;margin-bottom:16px;display:block}
@@ -367,6 +368,7 @@
 
         <div class="filter-actions">
             <a href="/dashboard" class="btn btn-outline"><i class="fas fa-undo"></i> Reset</a>
+            <button type="button" class="btn btn-outline" onclick="openExportModal()"><i class="fas fa-download"></i> Export</button>
             <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Terapkan Filter</button>
         </div>
     </form>
@@ -714,21 +716,106 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 
-{{-- MITRA RANKING --}}
-<div class="card">
-    <div class="chart-title"><i class="fas fa-trophy" style="color:#ca8a04"></i> Instansi Mitra Teratas</div>
-    @if($topMitraData->isEmpty())
-        <p style="color:#94a3b8;text-align:center;padding:20px">Tidak ada data mitra</p>
+{{-- MITRA RANKING (INTERNAL & EKSTERNAL) --}}
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+    {{-- MITRA EKSTERNAL --}}
+    <div class="card">
+        <div class="chart-title"><i class="fas fa-circle" style="color:#2173b5"></i> Mitra Eksternal</div>
+        <div style="display:flex;align-items:center;margin-bottom:20px">
+            <div style="width:100px;height:100px;position:relative;flex-shrink:0">
+                <canvas id="chartMitraEksternal"></canvas>
+                <div style="position:absolute;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#1e293b">
+                    <span id="pctEksternal">0%</span>
+                    <span style="font-size:10px;font-weight:500;color:#64748b;margin-top:-2px">dari total</span>
+                </div>
+            </div>
+            <div style="flex:1;text-align:center">
+                <div style="font-size:36px;font-weight:800;color:#2173b5;line-height:1">{{ number_format($totalMitraEksternal) }}</div>
+                <div style="font-size:12px;color:#64748b;font-weight:500;margin-top:6px">Total Mitra Eksternal</div>
+            </div>
+        </div>
+        <div style="font-size:12px;font-weight:700;margin-bottom:12px;text-transform:uppercase;color:#475569">Top 5 Mitra Eksternal</div>
+        @if($topMitraEksternal->isEmpty())
+            <p style="color:#94a3b8;font-size:13px;text-align:center">Tidak ada data mitra eksternal</p>
+        @else
+            <ul class="mitra-list">
+            @php $maxEks = $topMitraEksternal->max('total'); @endphp
+            @foreach($topMitraEksternal as $i => $mt)
+                <li style="display:flex;align-items:center;padding:10px 0;gap:14px;border-bottom:none">
+                    <div style="width:16px;text-align:right;font-size:13px;font-weight:600;color:#64748b">{{ $i+1 }}</div>
+                    <div style="flex:1">
+                        <div style="font-size:13px;margin-bottom:6px;font-weight:500;color:#334155">{{ $mt->nama_mitra }}</div>
+                        <div style="background:#f1f5f9;height:6px;border-radius:3px;width:100%;overflow:hidden">
+                            <div style="height:100%;background:#2173b5;border-radius:3px;width:{{ $maxEks > 0 ? ($mt->total / $maxEks) * 100 : 0 }}%"></div>
+                        </div>
+                    </div>
+                    <div style="font-size:13px;font-weight:600;width:32px;text-align:right;color:#1e293b">{{ number_format($mt->total) }}</div>
+                </li>
+            @endforeach
+            </ul>
+        @endif
+    </div>
+
+    {{-- MITRA INTERNAL --}}
+    <div class="card">
+        <div class="chart-title"><i class="fas fa-circle" style="color:#0f766e"></i> Mitra Internal</div>
+        <div style="display:flex;align-items:center;margin-bottom:20px">
+            <div style="width:100px;height:100px;position:relative;flex-shrink:0">
+                <canvas id="chartMitraInternal"></canvas>
+                <div style="position:absolute;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#1e293b">
+                    <span id="pctInternal">0%</span>
+                    <span style="font-size:10px;font-weight:500;color:#64748b;margin-top:-2px">dari total</span>
+                </div>
+            </div>
+            <div style="flex:1;text-align:center">
+                <div style="font-size:36px;font-weight:800;color:#0f766e;line-height:1">{{ number_format($totalMitraInternal) }}</div>
+                <div style="font-size:12px;color:#64748b;font-weight:500;margin-top:6px">Total Mitra Internal</div>
+            </div>
+        </div>
+        <div style="font-size:12px;font-weight:700;margin-bottom:12px;text-transform:uppercase;color:#475569">Top 5 Mitra Internal</div>
+        @if($topMitraInternal->isEmpty())
+            <p style="color:#94a3b8;font-size:13px;text-align:center">Tidak ada data mitra internal</p>
+        @else
+            <ul class="mitra-list">
+            @php $maxInt = $topMitraInternal->max('total'); @endphp
+            @foreach($topMitraInternal as $i => $mt)
+                <li style="display:flex;align-items:center;padding:10px 0;gap:14px;border-bottom:none">
+                    <div style="width:16px;text-align:right;font-size:13px;font-weight:600;color:#64748b">{{ $i+1 }}</div>
+                    <div style="flex:1">
+                        <div style="font-size:13px;margin-bottom:6px;font-weight:500;color:#334155">{{ $mt->nama_mitra }}</div>
+                        <div style="background:#f1f5f9;height:6px;border-radius:3px;width:100%;overflow:hidden">
+                            <div style="height:100%;background:#0f766e;border-radius:3px;width:{{ $maxInt > 0 ? ($mt->total / $maxInt) * 100 : 0 }}%"></div>
+                        </div>
+                    </div>
+                    <div style="font-size:13px;font-weight:600;width:32px;text-align:right;color:#1e293b">{{ number_format($mt->total) }}</div>
+                </li>
+            @endforeach
+            </ul>
+        @endif
+    </div>
+</div>
+
+{{-- DISTRIBUSI PER PROGRAM MBKM --}}
+<div class="card" style="margin-bottom:20px;padding-bottom:30px">
+    <div style="font-size:14px;font-weight:700;margin-bottom:24px;text-transform:uppercase;color:#1e293b;letter-spacing:0.5px">Distribusi Per Program MBKM</div>
+    @if($distribusiProgram->isEmpty())
+        <p style="color:#94a3b8;font-size:13px;text-align:center">Tidak ada data program</p>
     @else
-    <ul class="mitra-list">
-        @foreach($topMitraData as $i => $mt)
-        <li class="mitra-item">
-            <div class="mitra-rank">{{ $i+1 }}</div>
-            <div class="mitra-name">{{ $mt->nama_mitra }}</div>
-            <div class="mitra-count">{{ number_format($mt->total) }} Mhs</div>
-        </li>
+        <div style="display:flex;flex-direction:column;gap:14px">
+        @php
+            $maxProg = $distribusiProgram->max('total');
+            $progColorsList = ['#2173b5', '#673db0', '#0f766e', '#ca8a04', '#ea580c', '#4d7c0f', '#0369a1', '#b91c1c'];
+        @endphp
+        @foreach($distribusiProgram as $i => $prog)
+            <div style="display:flex;align-items:center;gap:20px">
+                <div style="width:260px;font-size:14px;font-weight:500;color:#334155">{{ $prog->nama_program }}</div>
+                <div style="flex:1;background:transparent;height:12px;display:flex;align-items:center">
+                    <div style="height:12px;background:{{ $progColorsList[$i % count($progColorsList)] }};border-radius:6px;width:{{ $maxProg > 0 ? ($prog->total / $maxProg) * 100 : 0 }}%"></div>
+                </div>
+                <div style="width:80px;text-align:right;font-size:14px;font-weight:500;color:#1e293b">{{ number_format($prog->total, 0, ',', '.') }}</div>
+            </div>
         @endforeach
-    </ul>
+        </div>
     @endif
 </div>
 
@@ -755,8 +842,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 <tr>
                     @if($isAdmin ?? false)<th style="width:40px"><input type="checkbox" id="selectAllRows" onchange="toggleSelectAll(this)" title="Pilih Semua"></th>@endif
                     <th>No</th><th>Program</th><th>Sub Program</th><th>Fakultas</th><th>Program Studi</th>
-                    <th>Nama Mahasiswa</th><th>NIM</th><th>Kegiatan</th><th>Mitra</th><th>Penyelenggara</th>
-                    <th>Semester</th><th>Tahun Ajaran</th>
+                    <th>NIM</th><th>Nama Mahasiswa</th><th>Tahun Ajaran</th><th>Semester</th><th>Semester TA</th>
+                    <th>Program Kegiatan</th><th>Penyelenggara</th><th>Mitra</th>
                     <th>Dosen Pembimbing</th><th>Jumlah Konversi SKS</th>
                     @if($isAdmin ?? false)<th style="width:60px">Aksi</th>@endif
                 </tr>
@@ -775,7 +862,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 {{-- EDIT MODAL --}}
 @if($isAdmin ?? false)
-<div class="edit-modal-overlay" id="editModalOverlay" onclick="if(event.target===this)closeEditModal()">
+<div class="edit-modal-overlay" id="editModalOverlay" onmousedown="if(event.target===this)this.dataset.close='1';" onmouseup="if(this.dataset.close==='1' && event.target===this){closeEditModal();} this.dataset.close='0';">
     <div class="edit-modal">
         <div class="edit-modal-header">
             <h3><i class="fas fa-edit" style="color:#7B1113"></i> Edit Data</h3>
@@ -784,19 +871,8 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="edit-modal-body">
             <input type="hidden" id="editRowId">
             <div class="edit-field">
-                <label>Kegiatan</label>
-                <input type="text" id="editKegiatan" placeholder="Nama kegiatan">
-            </div>
-            <div class="edit-field">
-                <label>Mitra</label>
-                <input type="text" id="editMitra" placeholder="Nama mitra">
-            </div>
-            <div class="edit-field">
-                <label>Penyelenggara</label>
-                <select id="editPenyelenggara">
-                    <option value="Eksternal">Eksternal</option>
-                    <option value="Internal">Internal</option>
-                </select>
+                <label>Tahun Ajaran</label>
+                <input type="text" id="editTahunAjaran" placeholder="contoh: 2024/2025">
             </div>
             <div class="edit-field">
                 <label>Semester</label>
@@ -806,8 +882,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 </select>
             </div>
             <div class="edit-field">
-                <label>Tahun Ajaran</label>
-                <input type="text" id="editTahunAjaran" placeholder="contoh: 2024/2025">
+                <label>Semester TA</label>
+                <input type="text" id="editSemesterTa" placeholder="contoh: 2024/2025 S1">
+            </div>
+            <div class="edit-field">
+                <label>Kegiatan</label>
+                <input type="text" id="editKegiatan" placeholder="Nama kegiatan">
+            </div>
+            <div class="edit-field">
+                <label>Penyelenggara</label>
+                <select id="editPenyelenggara">
+                    <option value="Eksternal">Eksternal</option>
+                    <option value="Internal">Internal</option>
+                </select>
+            </div>
+            <div class="edit-field">
+                <label>Mitra</label>
+                <input type="text" id="editMitra" placeholder="Nama mitra">
             </div>
             <div class="edit-field">
                 <label>Dosen Pembimbing</label>
@@ -826,10 +917,31 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 @endif
 
+{{-- EXPORT MODAL --}}
+<div class="edit-modal-overlay" id="exportModalOverlay" onmousedown="if(event.target===this)this.dataset.close='1';" onmouseup="if(this.dataset.close==='1' && event.target===this){closeExportModal();} this.dataset.close='0';">
+    <div class="edit-modal" style="max-width:400px;text-align:center">
+        <div class="edit-modal-header">
+            <h3><i class="fas fa-download" style="color:#7B1113"></i> Export Data</h3>
+            <button class="edit-modal-close" onclick="closeExportModal()">&times;</button>
+        </div>
+        <div class="edit-modal-body" style="padding:30px">
+            <p style="margin-bottom:20px;font-size:14px;color:#475569">Pilih format file untuk mengunduh laporan sesuai filter yang sedang aktif.</p>
+            <div style="display:flex;gap:15px;justify-content:center">
+                <button type="button" class="btn btn-outline" onclick="doExport('excel')" style="flex:1;padding:15px;color:#0f766e;border-color:#0f766e">
+                    <i class="fas fa-file-excel" style="font-size:24px;margin-bottom:8px;display:block"></i> Excel
+                </button>
+                <button type="button" class="btn btn-outline" onclick="doExport('pdf')" style="flex:1;padding:15px;color:#b91c1c;border-color:#b91c1c">
+                    <i class="fas fa-file-pdf" style="font-size:24px;margin-bottom:8px;display:block"></i> PDF
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 // === Lazy Loading Table ===
 const isAdmin = {{ ($isAdmin ?? false) ? 'true' : 'false' }};
-const colCount = isAdmin ? 16 : 14;
+const colCount = isAdmin ? 17 : 15;
 let tablePage = 1;
 let tableLastPage = 1;
 let tableLoading = false;
@@ -918,13 +1030,14 @@ function loadTablePage(page) {
                 <td>${esc(row.sub_program)}</td>
                 <td>${esc(row.fakultas)}</td>
                 <td>${esc(row.prodi)}</td>
-                <td>${esc(row.nama)}</td>
                 <td>${esc(row.nim)}</td>
-                <td>${esc(row.kegiatan)}</td>
-                <td>${esc(row.mitra)}</td>
-                <td>${esc(row.penyelenggara)}</td>
-                <td>${esc(row.semester)}</td>
+                <td>${esc(row.nama)}</td>
                 <td>${esc(row.tahun_ajaran)}</td>
+                <td>${esc(row.semester)}</td>
+                <td>${esc(row.semester_ta)}</td>
+                <td>${esc(row.kegiatan)}</td>
+                <td>${esc(row.penyelenggara)}</td>
+                <td>${esc(row.mitra)}</td>
                 <td>${esc(row.dosen_pembimbing)}</td>
                 <td>${row.sks}</td>
             `;
@@ -1097,27 +1210,31 @@ function showToast(msg) {
 let editRowData = {};
 
 function openEditModal(id, btn) {
+    // ... logic remains untouched inside here for now
+
     const tr = btn.closest('tr');
     const cells = tr.querySelectorAll('td');
     // Get data from the row cells (offset by 1 if admin because of checkbox column)
     const offset = isAdmin ? 1 : 0;
     editRowData = {
         id: id,
-        kegiatan: cells[7 + offset]?.textContent?.trim() || '',
-        mitra: cells[8 + offset]?.textContent?.trim() || '',
-        penyelenggara: cells[9 + offset]?.textContent?.trim() || '',
-        semester: cells[10 + offset]?.textContent?.trim() || '',
-        tahun_ajaran: cells[11 + offset]?.textContent?.trim() || '',
-        dosen_pembimbing: cells[12 + offset]?.textContent?.trim() || '',
-        sks: cells[13 + offset]?.textContent?.trim() || '0',
+        tahun_ajaran: cells[7 + offset]?.textContent?.trim() || '',
+        semester: cells[8 + offset]?.textContent?.trim() || '',
+        semester_ta: cells[9 + offset]?.textContent?.trim() || '',
+        kegiatan: cells[10 + offset]?.textContent?.trim() || '',
+        penyelenggara: cells[11 + offset]?.textContent?.trim() || '',
+        mitra: cells[12 + offset]?.textContent?.trim() || '',
+        dosen_pembimbing: cells[13 + offset]?.textContent?.trim() || '',
+        sks: cells[14 + offset]?.textContent?.trim() || '0',
     };
 
     document.getElementById('editRowId').value = id;
-    document.getElementById('editKegiatan').value = editRowData.kegiatan === '-' ? '' : editRowData.kegiatan;
-    document.getElementById('editMitra').value = editRowData.mitra === '-' ? '' : editRowData.mitra;
-    document.getElementById('editPenyelenggara').value = editRowData.penyelenggara;
-    document.getElementById('editSemester').value = editRowData.semester;
     document.getElementById('editTahunAjaran').value = editRowData.tahun_ajaran;
+    document.getElementById('editSemester').value = editRowData.semester;
+    document.getElementById('editSemesterTa').value = editRowData.semester_ta;
+    document.getElementById('editKegiatan').value = editRowData.kegiatan === '-' ? '' : editRowData.kegiatan;
+    document.getElementById('editPenyelenggara').value = editRowData.penyelenggara;
+    document.getElementById('editMitra').value = editRowData.mitra === '-' ? '' : editRowData.mitra;
     document.getElementById('editDosen').value = editRowData.dosen_pembimbing === '-' ? '' : editRowData.dosen_pembimbing;
     document.getElementById('editSks').value = parseInt(editRowData.sks) || 0;
 
@@ -1139,7 +1256,8 @@ function saveEdit() {
         mitra_nama: document.getElementById('editMitra').value.trim(),
         penyelenggara: document.getElementById('editPenyelenggara').value,
         semester: document.getElementById('editSemester').value,
-        tahun_ajaran: document.getElementById('editTahunAjaran').value,
+        semester_ta: document.getElementById('editSemesterTa').value.trim(),
+        tahun_ajaran: document.getElementById('editTahunAjaran').value.trim(),
         dosen_pembimbing: document.getElementById('editDosen').value || null,
         sks: parseInt(document.getElementById('editSks').value) || 0,
     };
@@ -1153,7 +1271,13 @@ function saveEdit() {
         },
         body: JSON.stringify(payload)
     })
-    .then(res => res.json())
+    .then(async res => {
+        const data = await res.json();
+        if (!res.ok) {
+            throw data;
+        }
+        return data;
+    })
     .then(data => {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-save"></i> Simpan';
@@ -1161,15 +1285,36 @@ function saveEdit() {
             closeEditModal();
             showToast('Data berhasil diperbarui');
             resetAndLoadTable();
-        } else {
-            alert('Gagal menyimpan: ' + (data.message || 'Unknown error'));
         }
     })
     .catch(err => {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-save"></i> Simpan';
-        alert('Error: ' + err.message);
+        let errMsg = err.message || 'Gagal menyimpan data';
+        if (err.errors) {
+            errMsg = Object.values(err.errors).flat().join('\n');
+        }
+        alert('Kesalahan Validasi:\n' + errMsg);
     });
+}
+
+// === Export Modal ===
+function openExportModal() {
+    document.getElementById('exportModalOverlay').classList.add('show');
+}
+
+function closeExportModal() {
+    document.getElementById('exportModalOverlay').classList.remove('show');
+}
+
+function doExport(type) {
+    const qs = window.location.search;
+    if (type === 'excel') {
+        window.location.href = '/api/export-excel' + qs;
+    } else {
+        window.open('/api/export-pdf' + qs, '_blank');
+    }
+    closeExportModal();
 }
 </script>
 
@@ -1177,8 +1322,8 @@ function saveEdit() {
 <script>
 // Color map for fakultas
 const fakultasColors = {
-    'FTE':'#005A98','FIF':'#D3B048','FEB':'#31BAAD','FRI':'#109344',
-    'FKS':'#673DB0','FIK':'#DF4B11','FIT':'#00FF66'
+    'FTE':'#004f86','FIF':'#c7a12c','FEB':'#239e91','FRI':'#0d8039',
+    'FKS':'#59329e','FIK':'#cc420c','FIT':'#00cc52'
 };
 function getFakColor(name) {
     return fakultasColors[name.toUpperCase()] || '#9ca3af';
@@ -1193,9 +1338,9 @@ const trenDatasets = trenSeries.map(s => ({
     borderColor: getFakColor(s.label),
     backgroundColor: getFakColor(s.label),
     tension: 0.3,
-    borderWidth: 2.5,
-    pointRadius: 4,
-    pointHoverRadius: 6,
+    borderWidth: 3.5,
+    pointRadius: 5,
+    pointHoverRadius: 7,
     fill: false
 }));
 new Chart(document.getElementById('chartTren'), {
@@ -1306,6 +1451,56 @@ new Chart(document.getElementById('chartProgram'), {
         }
     }
 });
+
+// MITRA DOUGHNUT CHARTS
+const totalEks = {{ $totalMitraEksternal ?? 0 }};
+const totalInt = {{ $totalMitraInternal ?? 0 }};
+const totalAllMitra = totalEks + totalInt;
+const pctEks = totalAllMitra > 0 ? Math.round((totalEks / totalAllMitra) * 100) : 0;
+const pctInt = totalAllMitra > 0 ? Math.round((totalInt / totalAllMitra) * 100) : 0;
+
+if(document.getElementById('pctEksternal')) document.getElementById('pctEksternal').innerText = pctEks + '%';
+if(document.getElementById('pctInternal')) document.getElementById('pctInternal').innerText = pctInt + '%';
+
+if(document.getElementById('chartMitraEksternal')){
+    new Chart(document.getElementById('chartMitraEksternal'), {
+        type: 'doughnut',
+        data: {
+            datasets: [{
+                data: [totalEks, totalInt],
+                backgroundColor: ['#2173b5', '#e2e8f0'],
+                borderWidth: 0,
+                cutout: '75%'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { tooltip: { enabled: false }, legend: { display: false } },
+            animation: { animateScale: true }
+        }
+    });
+}
+
+if(document.getElementById('chartMitraInternal')){
+    new Chart(document.getElementById('chartMitraInternal'), {
+        type: 'doughnut',
+        data: {
+            datasets: [{
+                data: [totalInt, totalEks],
+                backgroundColor: ['#0f766e', '#e2e8f0'],
+                borderWidth: 0,
+                cutout: '75%'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { tooltip: { enabled: false }, legend: { display: false } },
+            animation: { animateScale: true }
+        }
+    });
+}
 </script>
 
 @endif {{-- end hasData --}}

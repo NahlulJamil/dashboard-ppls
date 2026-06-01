@@ -21,6 +21,8 @@ class FakultasSeeder extends Seeder
             'FKS',
             'FIK',
             'FIT',
+            'TUP',
+            'TUS',
         ];
 
         foreach ($fakultasList as $nama) {

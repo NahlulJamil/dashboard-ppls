@@ -104,17 +104,10 @@ class DataPlpsImport implements ToCollection
                     ->where('fakultas_id', $fakultas->id)
                     ->first();
                 if (!$prodi) {
-                    // Cek juga apakah ada prodi dengan nama sama di fakultas manapun
-                    $existingProdi = Prodi::whereRaw('LOWER(nama_prodi) = ?', [mb_strtolower($prodiInput)])->first();
-                    if ($existingProdi) {
-                        // Prodi sudah ada di fakultas lain, gunakan yang sudah ada
-                        $prodi = $existingProdi;
-                    } else {
-                        $prodi = Prodi::create([
-                            'nama_prodi' => $prodiInput,
-                            'fakultas_id' => $fakultas->id,
-                        ]);
-                    }
+                    $prodi = Prodi::create([
+                        'nama_prodi' => $prodiInput,
+                        'fakultas_id' => $fakultas->id,
+                    ]);
                 }
 
                 // === PROGRAM (firstOrCreate + unique) ===
@@ -168,14 +161,13 @@ class DataPlpsImport implements ToCollection
 
                 // === CEK DUPLIKAT ===
                 $exists = DataPlps::where('nim', $nimInput)
-                    ->where('kegiatan_id', $kegiatan->id)
-                    ->where('mitra_id', $mitra->id)
+                    ->where('program_id', $program->id)
                     ->where('semester', $semesterInput)
                     ->where('tahun_ajaran', $tahunAjaranInput)
                     ->exists();
 
                 if ($exists) {
-                    throw new Exception("Data duplikat (NIM: {$nimInput}, Kegiatan: {$kegiatanInput}, Semester: {$semesterInput}, TA: {$tahunAjaranInput})");
+                    throw new Exception("Data duplikat (NIM: {$nimInput}, Program: {$programInput}, Semester: {$semesterInput}, TA: {$tahunAjaranInput})");
                 }
 
                 if (!$this->validateOnly) {

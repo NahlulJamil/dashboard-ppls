@@ -227,7 +227,7 @@
                 @foreach($histories as $h)
                 <tr>
                     <td><i class="fas fa-file-excel" style="color:#16a34a;margin-right:6px"></i>{{ $h->filename }}</td>
-                    <td>{{ $h->created_at->format('d M Y, H:i') }}</td>
+                    <td>{{ $h->created_at->timezone('Asia/Jakarta')->translatedFormat('d M Y, H:i') }}</td>
                     <td>{{ $h->admin->username ?? '-' }}</td>
                     <td><span class="status-success"><i class="fas fa-check-circle"></i> Berhasil ({{ number_format($h->rows_count) }} baris)</span></td>
                 </tr>
