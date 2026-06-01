@@ -58,6 +58,24 @@ class DataPlpsController extends Controller
             ->orderBy('mitras.nama_mitra')
             ->get();
 
+        // Semester TA & Tahun Ajaran filter options
+        $allSemesterTa = DB::table('data_plps')
+            ->select('semester_ta')
+            ->distinct()
+            ->whereNotNull('semester_ta')
+            ->orderBy('semester_ta')
+            ->pluck('semester_ta');
+
+        $allTahunAjaran = DB::table('data_plps')
+            ->select('tahun_ajaran')
+            ->distinct()
+            ->whereNotNull('tahun_ajaran')
+            ->orderBy('tahun_ajaran')
+            ->pluck('tahun_ajaran');
+
+        // Default: 5 semester TA terbaru (auto-checked saat pertama kali buka)
+        $defaultSemesterTa = $allSemesterTa->sortDesc()->take(5)->values()->toArray();
+
         if (!$hasData) {
             return view('dashboard', [
                 'hasData' => false,
@@ -66,10 +84,23 @@ class DataPlpsController extends Controller
                 'fakultas' => $fakultas,
                 'prodi' => $prodi,
                 'allMitra' => $allMitra,
+                'allSemesterTa' => $allSemesterTa,
+                'allTahunAjaran' => $allTahunAjaran,
+                'defaultSemesterTa' => $defaultSemesterTa,
             ]);
         }
 
         // === SUMMARY STATS ===
+        // Auto-apply default semester_ta filter on first load (no filter params in URL)
+        $isFirstLoad = !$request->has('program_id') && !$request->has('sub_program_id')
+            && !$request->has('fakultas_id') && !$request->has('prodi_id')
+            && !$request->has('penyelenggara') && !$request->has('mitra_id')
+            && !$request->has('semester_ta') && !$request->has('tahun_ajaran');
+
+        if ($isFirstLoad && !empty($defaultSemesterTa)) {
+            $request->merge(['semester_ta' => $defaultSemesterTa]);
+        }
+
         $baseQuery = DataPlps::query();
         $this->applyEloquentFilters($baseQuery, $request);
 
@@ -78,19 +109,29 @@ class DataPlpsController extends Controller
         $totalProgram = (clone $baseQuery)->distinct()->count('program_id');
         $totalSubProgram = (clone $baseQuery)->distinct()->count('sub_program_id');
 
-        // === MAHASISWA PER FAKULTAS ===
+        // === TOP 5 FAKULTAS ===
         $mahasiswaPerFakultas = $this->chartQuery($request)
             ->select('fakultas.nama_fakultas', DB::raw('COUNT(DISTINCT data_plps.nim) as total'))
             ->groupBy('fakultas.nama_fakultas')
             ->orderByDesc('total')
+            ->limit(5)
             ->get();
 
-        // === TOP 7 PRODI ===
+        // === TOP 5 PRODI ===
         $topProdi = $this->chartQuery($request)
             ->select('prodis.nama_prodi', DB::raw('COUNT(DISTINCT data_plps.nim) as total'))
             ->groupBy('prodis.nama_prodi')
             ->orderByDesc('total')
-            ->limit(7)
+            ->limit(5)
+            ->get();
+
+        // === TOP 5 PROGRAM ===
+        $topProgram = $this->chartQuery($request)
+            ->join('programs', 'data_plps.program_id', '=', 'programs.id')
+            ->select('programs.nama_program', DB::raw('COUNT(DISTINCT data_plps.nim) as total'))
+            ->groupBy('programs.nama_program')
+            ->orderByDesc('total')
+            ->limit(5)
             ->get();
 
         // === TOP 5 MITRA ===
@@ -121,6 +162,9 @@ class DataPlpsController extends Controller
             $trenSeries[] = ['label' => $fak, 'data' => $data];
         }
 
+        // Check if user is admin for edit/delete permissions
+        $isAdmin = auth()->guard('admin')->check();
+
         return view('dashboard', compact(
             'hasData',
             'programs',
@@ -128,15 +172,20 @@ class DataPlpsController extends Controller
             'fakultas',
             'prodi',
             'allMitra',
+            'allSemesterTa',
+            'allTahunAjaran',
+            'defaultSemesterTa',
             'totalMahasiswa',
             'totalMitra',
             'totalProgram',
             'totalSubProgram',
             'mahasiswaPerFakultas',
             'topProdi',
+            'topProgram',
             'topMitraData',
             'semesters',
-            'trenSeries'
+            'trenSeries',
+            'isAdmin'
         ));
     }
 
@@ -233,6 +282,12 @@ class DataPlpsController extends Controller
             $ids = $this->expandIds($request->prodi_id);
             $query->whereHas('mahasiswa', fn($q) => $q->whereIn('prodi_id', $ids));
         }
+        if ($request->has('semester_ta') && !empty(array_filter((array)$request->semester_ta))) {
+            $query->whereIn('semester_ta', (array)$request->semester_ta);
+        }
+        if ($request->has('tahun_ajaran') && !empty(array_filter((array)$request->tahun_ajaran))) {
+            $query->whereIn('tahun_ajaran', (array)$request->tahun_ajaran);
+        }
     }
 
     /**
@@ -262,6 +317,12 @@ class DataPlpsController extends Controller
         }
         if ($request->has('prodi_id') && !empty(array_filter((array)$request->prodi_id))) {
             $q->whereIn('mahasiswas.prodi_id', $this->expandIds($request->prodi_id));
+        }
+        if ($request->has('semester_ta') && !empty(array_filter((array)$request->semester_ta))) {
+            $q->whereIn('data_plps.semester_ta', (array)$request->semester_ta);
+        }
+        if ($request->has('tahun_ajaran') && !empty(array_filter((array)$request->tahun_ajaran))) {
+            $q->whereIn('data_plps.tahun_ajaran', (array)$request->tahun_ajaran);
         }
 
         return $q;
@@ -298,6 +359,12 @@ class DataPlpsController extends Controller
             }
             if (!in_array('prodi_id', $excludeFilters) && $request->has('prodi_id') && !empty(array_filter((array)$request->prodi_id))) {
                 $q->whereIn('mahasiswas.prodi_id', $this->expandIds($request->prodi_id));
+            }
+            if (!in_array('semester_ta', $excludeFilters) && $request->has('semester_ta') && !empty(array_filter((array)$request->semester_ta))) {
+                $q->whereIn('data_plps.semester_ta', (array)$request->semester_ta);
+            }
+            if (!in_array('tahun_ajaran', $excludeFilters) && $request->has('tahun_ajaran') && !empty(array_filter((array)$request->tahun_ajaran))) {
+                $q->whereIn('data_plps.tahun_ajaran', (array)$request->tahun_ajaran);
             }
 
             return $q;
@@ -353,6 +420,30 @@ class DataPlpsController extends Controller
                 return $item;
             });
 
+        // Semester TA: apply all filters EXCEPT semester_ta
+        $semesterTa = $buildBase(['semester_ta'])
+            ->select('data_plps.semester_ta as label', DB::raw('COUNT(data_plps.id) as total'))
+            ->whereNotNull('data_plps.semester_ta')
+            ->groupBy('data_plps.semester_ta')
+            ->orderBy('data_plps.semester_ta')
+            ->get()
+            ->map(function ($item) {
+                $item->id = $item->label;
+                return $item;
+            });
+
+        // Tahun Ajaran: apply all filters EXCEPT tahun_ajaran
+        $tahunAjaran = $buildBase(['tahun_ajaran'])
+            ->select('data_plps.tahun_ajaran as label', DB::raw('COUNT(data_plps.id) as total'))
+            ->whereNotNull('data_plps.tahun_ajaran')
+            ->groupBy('data_plps.tahun_ajaran')
+            ->orderBy('data_plps.tahun_ajaran')
+            ->get()
+            ->map(function ($item) {
+                $item->id = $item->label;
+                return $item;
+            });
+
         return response()->json([
             'program_id' => $programs,
             'sub_program_id' => $subPrograms,
@@ -360,6 +451,8 @@ class DataPlpsController extends Controller
             'prodi_id' => $prodi,
             'mitra_id' => $allMitra,
             'penyelenggara' => $penyelenggara,
+            'semester_ta' => $semesterTa,
+            'tahun_ajaran' => $tahunAjaran,
         ]);
     }
 
@@ -482,20 +575,68 @@ class DataPlpsController extends Controller
         return Excel::download(new \App\Exports\TemplateExport, 'template_data_plps.xlsx');
     }
 
-    public function update(Request $request, $id)
+    /**
+     * API: Update a single DataPlps row (inline edit from dashboard table).
+     */
+    public function updateRow(Request $request, $id)
     {
         $data = DataPlps::findOrFail($id);
 
-        $data->update($request->all());
+        $validated = $request->validate([
+            'kegiatan_nama' => 'nullable|string',
+            'mitra_nama' => 'nullable|string',
+            'penyelenggara' => 'sometimes|in:Eksternal,Internal',
+            'semester' => 'sometimes|in:GANJIL,GENAP',
+            'tahun_ajaran' => 'sometimes|string',
+            'dosen_pembimbing' => 'nullable|string',
+            'sks' => 'sometimes|integer|min:0',
+        ]);
 
-        return redirect()->back()->with('success', 'Data berhasil diupdate');
+        $updateData = [];
+        if (isset($validated['penyelenggara'])) $updateData['penyelenggara'] = $validated['penyelenggara'];
+        if (isset($validated['semester'])) $updateData['semester'] = $validated['semester'];
+        if (isset($validated['tahun_ajaran'])) $updateData['tahun_ajaran'] = $validated['tahun_ajaran'];
+        if (array_key_exists('dosen_pembimbing', $validated)) $updateData['dosen_pembimbing'] = $validated['dosen_pembimbing'];
+        if (isset($validated['sks'])) $updateData['sks'] = $validated['sks'];
+
+        if (!empty($validated['kegiatan_nama'])) {
+            $kegiatan = \App\Models\Kegiatan::firstOrCreate(['nama_kegiatan' => $validated['kegiatan_nama']]);
+            $updateData['kegiatan_id'] = $kegiatan->id;
+        }
+
+        if (!empty($validated['mitra_nama'])) {
+            $mitra = \App\Models\Mitra::firstOrCreate(['nama_mitra' => $validated['mitra_nama']]);
+            $updateData['mitra_id'] = $mitra->id;
+        }
+
+        $data->update($updateData);
+
+        // Reload with relations for response
+        $data->load(['kegiatan', 'mitra']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Data berhasil diperbarui',
+            'data' => $data,
+        ]);
     }
 
-    public function destroy($id)
+    /**
+     * API: Bulk delete DataPlps rows.
+     */
+    public function bulkDelete(Request $request)
     {
-        $data = DataPlps::findOrFail($id);
-        $data->delete();
+        $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'integer|exists:data_plps,id',
+        ]);
 
-        return redirect()->back()->with('success', 'Data berhasil dihapus');
+        $count = DataPlps::whereIn('id', $request->ids)->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => "{$count} data berhasil dihapus",
+            'deleted_count' => $count,
+        ]);
     }
 }

@@ -59,6 +59,7 @@
     .summary-card .label{font-size:12px;color:#64748b;font-weight:500;margin-top:4px}
     /* Charts */
     .chart-row{display:grid;grid-template-columns:1.2fr 1fr;gap:20px;margin-bottom:20px}
+    .chart-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-bottom:20px}
     .chart-title{font-size:16px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px}
     /* Mitra ranking */
     .mitra-list{list-style:none}
@@ -94,7 +95,31 @@
     .empty-state i{font-size:56px;margin-bottom:16px;display:block}
     .empty-state p{font-size:16px;font-weight:500}
 
+    /* Edit Modal */
+    .edit-modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9000;display:none;align-items:center;justify-content:center;animation:fadeIn .2s ease}
+    .edit-modal-overlay.show{display:flex}
+    .edit-modal{background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.3);width:520px;max-width:95vw;max-height:90vh;overflow-y:auto;animation:popIn .3s ease}
+    .edit-modal-header{padding:20px 24px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between}
+    .edit-modal-header h3{font-size:18px;font-weight:700;color:#1e293b}
+    .edit-modal-close{background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;padding:4px}
+    .edit-modal-close:hover{color:#1e293b}
+    .edit-modal-body{padding:20px 24px}
+    .edit-field{margin-bottom:16px}
+    .edit-field label{display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px}
+    .edit-field input,.edit-field select{width:100%;padding:10px 14px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;transition:border-color .2s}
+    .edit-field input:focus,.edit-field select:focus{outline:none;border-color:#7B1113}
+    .edit-modal-footer{padding:16px 24px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:10px}
+    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+    @keyframes popIn{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}
+
+    /* Bulk Delete Toolbar */
+    .bulk-toolbar{display:none;align-items:center;gap:12px;padding:10px 16px;background:linear-gradient(135deg,#fef2f2,#fff1f2);border:1px solid #fecaca;border-radius:10px;margin-bottom:12px;animation:tagIn .2s ease}
+    .bulk-toolbar.show{display:flex}
+    .bulk-toolbar .bulk-count{font-size:14px;font-weight:600;color:#991b1b;flex:1}
+    .btn-danger{background:#dc2626;color:#fff;font-size:13px}.btn-danger:hover{background:#b91c1c}
+
     /* Responsive */
+    @media(max-width:1100px){.chart-row-3{grid-template-columns:1fr}}
     @media(max-width:900px){.chart-row{grid-template-columns:1fr}.ms-dropdown{max-width:none}}
     @media(max-width:600px){.summary-grid{grid-template-columns:1fr 1fr}.filter-grid{flex-direction:column}.ms-dropdown{max-width:none}}
 
@@ -281,6 +306,60 @@
                 </div>
             </div>
 
+            {{-- Semester TA --}}
+            @php
+                $semesterTaValues = (array) request('semester_ta', []);
+                $isFirstLoad = !request()->has('program_id') && !request()->has('sub_program_id') && !request()->has('fakultas_id') && !request()->has('prodi_id') && !request()->has('penyelenggara') && !request()->has('mitra_id') && !request()->has('semester_ta') && !request()->has('tahun_ajaran');
+                if ($isFirstLoad && isset($defaultSemesterTa)) {
+                    $semesterTaValues = $defaultSemesterTa;
+                }
+            @endphp
+            <div class="ms-dropdown" data-name="semester_ta" data-label="Semester TA">
+                <div class="ms-trigger" onclick="togglePanel(this)">
+                    <span class="ms-label">Semua Semester TA</span>
+                    <span class="ms-arrow"><i class="fas fa-chevron-down"></i></span>
+                </div>
+                <div class="ms-panel">
+                    <div class="ms-panel-header">
+                        <label><input type="checkbox" class="ms-select-all" onchange="toggleAll(this)"> Pilih Semua</label>
+                    </div>
+                    <div class="ms-search"><input type="text" placeholder="Cari semester TA..." oninput="searchOptions(this)"></div>
+                    <div class="ms-options">
+                        @foreach($allSemesterTa ?? [] as $sta)
+                        @php $isChecked = in_array($sta, $semesterTaValues); @endphp
+                        <label class="ms-option" data-id="{{ $sta }}">
+                            <input type="checkbox" name="semester_ta[]" value="{{ $sta }}" {{ $isChecked ? 'checked' : '' }} onchange="updateDropdown(this)">
+                            <span>{{ $sta }}</span>
+                            <span class="ms-count">{{ $m->total }}</span>
+                        </label>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+
+            {{-- Tahun Ajaran --}}
+            <div class="ms-dropdown" data-name="tahun_ajaran" data-label="Tahun Ajaran">
+                <div class="ms-trigger" onclick="togglePanel(this)">
+                    <span class="ms-label">Semua Tahun Ajaran</span>
+                    <span class="ms-arrow"><i class="fas fa-chevron-down"></i></span>
+                </div>
+                <div class="ms-panel">
+                    <div class="ms-panel-header">
+                        <label><input type="checkbox" class="ms-select-all" onchange="toggleAll(this)"> Pilih Semua</label>
+                    </div>
+                    <div class="ms-search"><input type="text" placeholder="Cari tahun ajaran..." oninput="searchOptions(this)"></div>
+                    <div class="ms-options">
+                        @foreach($allTahunAjaran ?? [] as $ta)
+                        @php $isChecked = is_array(request('tahun_ajaran')) && in_array($ta, request('tahun_ajaran')); @endphp
+                        <label class="ms-option" data-id="{{ $ta }}">
+                            <input type="checkbox" name="tahun_ajaran[]" value="{{ $ta }}" {{ $isChecked ? 'checked' : '' }} onchange="updateDropdown(this)">
+                            <span>{{ $ta }}</span>
+                        </label>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+
         </div>
 
         {{-- Active Filter Tags --}}
@@ -391,11 +470,6 @@ function updateDropdown(changedCb) {
     if (checked.length === 0 || (checked.length === visibleCbs.length && visibleCbs.length === allCbs.length)) {
         label.textContent = 'Semua ' + dataLabel;
         trigger.classList.remove('has-selection');
-        // If "all" selected, uncheck all (treat as no filter)
-        if (checked.length === allCbs.length && allCbs.length > 0) {
-            allCbs.forEach(cb => cb.checked = false);
-            label.textContent = 'Semua ' + dataLabel;
-        }
     } else if (checked.length === 1) {
         label.textContent = checked[0].closest('.ms-option').querySelector('span').textContent;
         trigger.classList.add('has-selection');
@@ -421,7 +495,13 @@ function updateFilterTags() {
 
     document.querySelectorAll('.ms-dropdown').forEach(dropdown => {
         const dataLabel = dropdown.dataset.label;
+        const allCbs = dropdown.querySelectorAll('.ms-options input[type=checkbox]');
         const checked = dropdown.querySelectorAll('.ms-options input[type=checkbox]:checked');
+
+        // Skip adding individual tags if ALL options are checked
+        if (checked.length === allCbs.length && allCbs.length > 0) {
+            return;
+        }
 
         checked.forEach(cb => {
             const name = cb.closest('.ms-option').querySelector('span').textContent;
@@ -446,8 +526,10 @@ function getActiveFilters() {
     const filters = {};
     document.querySelectorAll('.ms-dropdown').forEach(dropdown => {
         const name = dropdown.dataset.name;
+        const allCbs = dropdown.querySelectorAll('.ms-options input[type=checkbox]');
         const checked = dropdown.querySelectorAll('.ms-options input[type=checkbox]:checked');
-        if (checked.length > 0) {
+        
+        if (checked.length > 0 && checked.length < allCbs.length) {
             filters[name] = Array.from(checked).map(cb => cb.value);
         }
     });
@@ -610,15 +692,25 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 
-{{-- CHARTS ROW --}}
-<div class="chart-row">
+{{-- TREN PER SEMESTER (moved above) --}}
+<div class="card">
+    <div class="chart-title"><i class="fas fa-chart-line" style="color:#7B1113"></i> Grafik Per Semester</div>
+    <canvas id="chartTren" height="120"></canvas>
+</div>
+
+{{-- TOP 5 ROW: Fakultas | Prodi | Program --}}
+<div class="chart-row-3">
     <div class="card">
-        <div class="chart-title"><i class="fas fa-chart-bar" style="color:#7B1113"></i> Mahasiswa per Fakultas</div>
-        <canvas id="chartFakultas" height="280"></canvas>
+        <div class="chart-title"><i class="fas fa-chart-bar" style="color:#7B1113"></i> Top 5 Fakultas</div>
+        <canvas id="chartFakultas" height="250"></canvas>
     </div>
     <div class="card">
-        <div class="chart-title"><i class="fas fa-chart-bar" style="color:#7B1113"></i> Top 7 Prodi Terbanyak</div>
-        <canvas id="chartProdi" height="280"></canvas>
+        <div class="chart-title"><i class="fas fa-chart-bar" style="color:#7B1113"></i> Top 5 Prodi Terbanyak</div>
+        <canvas id="chartProdi" height="250"></canvas>
+    </div>
+    <div class="card">
+        <div class="chart-title"><i class="fas fa-chart-bar" style="color:#7B1113"></i> Top 5 Program Terbanyak</div>
+        <canvas id="chartProgram" height="250"></canvas>
     </div>
 </div>
 
@@ -640,12 +732,6 @@ document.addEventListener('DOMContentLoaded', function() {
     @endif
 </div>
 
-{{-- TREN PER SEMESTER --}}
-<div class="card">
-    <div class="chart-title"><i class="fas fa-chart-line" style="color:#7B1113"></i> Grafik Per Semester</div>
-    <canvas id="chartTren" height="120"></canvas>
-</div>
-
 {{-- DATA MAHASISWA MBKM TABLE --}}
 <div class="card" id="tableCard">
     <div class="chart-title"><i class="fas fa-table" style="color:#7B1113"></i> Data Mahasiswa MBKM</div>
@@ -655,14 +741,24 @@ document.addEventListener('DOMContentLoaded', function() {
         <button type="button" class="btn btn-primary" onclick="resetAndLoadTable()"><i class="fas fa-search"></i> Cari</button>
     </div>
 
+    @if($isAdmin ?? false)
+    <div class="bulk-toolbar" id="bulkToolbar">
+        <span class="bulk-count"><i class="fas fa-check-square"></i> <span id="selectedCount">0</span> data dipilih</span>
+        <button type="button" class="btn btn-danger" onclick="bulkDeleteSelected()"><i class="fas fa-trash"></i> Hapus Terpilih</button>
+        <button type="button" class="btn btn-outline" onclick="clearAllSelections()" style="font-size:13px"><i class="fas fa-times"></i> Batal</button>
+    </div>
+    @endif
+
     <div class="table-wrap" id="tableWrap">
         <table class="data-table" id="lazyTable">
             <thead>
                 <tr>
+                    @if($isAdmin ?? false)<th style="width:40px"><input type="checkbox" id="selectAllRows" onchange="toggleSelectAll(this)" title="Pilih Semua"></th>@endif
                     <th>No</th><th>Program</th><th>Sub Program</th><th>Fakultas</th><th>Program Studi</th>
                     <th>Nama Mahasiswa</th><th>NIM</th><th>Kegiatan</th><th>Mitra</th><th>Penyelenggara</th>
                     <th>Semester</th><th>Tahun Ajaran</th>
                     <th>Dosen Pembimbing</th><th>Jumlah Konversi SKS</th>
+                    @if($isAdmin ?? false)<th style="width:60px">Aksi</th>@endif
                 </tr>
             </thead>
             <tbody id="tableBody">
@@ -677,22 +773,82 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="table-status" id="tableStatus"><i class="fas fa-spinner fa-spin"></i> Memuat data...</div>
 </div>
 
+{{-- EDIT MODAL --}}
+@if($isAdmin ?? false)
+<div class="edit-modal-overlay" id="editModalOverlay" onclick="if(event.target===this)closeEditModal()">
+    <div class="edit-modal">
+        <div class="edit-modal-header">
+            <h3><i class="fas fa-edit" style="color:#7B1113"></i> Edit Data</h3>
+            <button class="edit-modal-close" onclick="closeEditModal()">&times;</button>
+        </div>
+        <div class="edit-modal-body">
+            <input type="hidden" id="editRowId">
+            <div class="edit-field">
+                <label>Kegiatan</label>
+                <input type="text" id="editKegiatan" placeholder="Nama kegiatan">
+            </div>
+            <div class="edit-field">
+                <label>Mitra</label>
+                <input type="text" id="editMitra" placeholder="Nama mitra">
+            </div>
+            <div class="edit-field">
+                <label>Penyelenggara</label>
+                <select id="editPenyelenggara">
+                    <option value="Eksternal">Eksternal</option>
+                    <option value="Internal">Internal</option>
+                </select>
+            </div>
+            <div class="edit-field">
+                <label>Semester</label>
+                <select id="editSemester">
+                    <option value="GANJIL">GANJIL</option>
+                    <option value="GENAP">GENAP</option>
+                </select>
+            </div>
+            <div class="edit-field">
+                <label>Tahun Ajaran</label>
+                <input type="text" id="editTahunAjaran" placeholder="contoh: 2024/2025">
+            </div>
+            <div class="edit-field">
+                <label>Dosen Pembimbing</label>
+                <input type="text" id="editDosen" placeholder="Nama dosen pembimbing">
+            </div>
+            <div class="edit-field">
+                <label>Jumlah Konversi SKS</label>
+                <input type="number" id="editSks" min="0" placeholder="0">
+            </div>
+        </div>
+        <div class="edit-modal-footer">
+            <button class="btn btn-outline" onclick="closeEditModal()">Batal</button>
+            <button class="btn btn-primary" id="editSaveBtn" onclick="saveEdit()"><i class="fas fa-save"></i> Simpan</button>
+        </div>
+    </div>
+</div>
+@endif
+
 <script>
 // === Lazy Loading Table ===
+const isAdmin = {{ ($isAdmin ?? false) ? 'true' : 'false' }};
+const colCount = isAdmin ? 16 : 14;
 let tablePage = 1;
 let tableLastPage = 1;
 let tableLoading = false;
 let tableTotal = 0;
 let tableLoadedCount = 0;
 let tableAbortController = null;
+let selectedIds = new Set();
 
 function getTableFilters() {
     const params = new URLSearchParams();
     // Get active filters from dropdowns
     document.querySelectorAll('.ms-dropdown').forEach(dropdown => {
         const name = dropdown.dataset.name;
+        const allCbs = dropdown.querySelectorAll('.ms-options input[type=checkbox]');
         const checked = dropdown.querySelectorAll('.ms-options input[type=checkbox]:checked');
-        checked.forEach(cb => params.append(name + '[]', cb.value));
+        
+        if (checked.length > 0 && checked.length < allCbs.length) {
+            checked.forEach(cb => params.append(name + '[]', cb.value));
+        }
     });
     // Get search inputs
     const searchNama = document.getElementById('searchNama').value.trim();
@@ -741,7 +897,7 @@ function loadTablePage(page) {
         }
 
         if (data.data.length === 0 && page === 1) {
-            tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:30px;color:#94a3b8">Tidak ada data yang sesuai</td></tr>';
+            tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center;padding:30px;color:#94a3b8">Tidak ada data yang sesuai</td></tr>`;
             statusEl.style.display = 'none';
             document.getElementById('tableInfo').style.display = 'none';
             tableLoading = false;
@@ -750,7 +906,13 @@ function loadTablePage(page) {
 
         data.data.forEach(row => {
             const tr = document.createElement('tr');
-            tr.innerHTML = `
+            tr.dataset.id = row.id;
+            let html = '';
+            if (isAdmin) {
+                const checked = selectedIds.has(row.id) ? 'checked' : '';
+                html += `<td><input type="checkbox" class="row-cb" value="${row.id}" ${checked} onchange="toggleRowSelect(this)"></td>`;
+            }
+            html += `
                 <td>${row.no}</td>
                 <td>${esc(row.program)}</td>
                 <td>${esc(row.sub_program)}</td>
@@ -766,6 +928,10 @@ function loadTablePage(page) {
                 <td>${esc(row.dosen_pembimbing)}</td>
                 <td>${row.sks}</td>
             `;
+            if (isAdmin) {
+                html += `<td><button class="btn" style="padding:4px 8px;font-size:12px;background:#7B1113;color:#fff" onclick="openEditModal(${row.id}, this)" title="Edit"><i class="fas fa-edit"></i></button></td>`;
+            }
+            tr.innerHTML = html;
             tbody.appendChild(tr);
         });
 
@@ -811,7 +977,7 @@ function showSkeletonRows() {
         const tr = document.createElement('tr');
         tr.className = 'skeleton-row';
         let cells = '';
-        for (let j = 0; j < 14; j++) {
+        for (let j = 0; j < colCount; j++) {
             const w = 40 + Math.random() * 60;
             cells += `<td><div class="skeleton-bar" style="width:${w}%"></div></td>`;
         }
@@ -857,6 +1023,154 @@ document.addEventListener('DOMContentLoaded', function() {
     // Small delay to let filters initialize first
     setTimeout(() => loadTablePage(1), 100);
 });
+
+// === Selection & Bulk Delete ===
+function toggleRowSelect(cb) {
+    const id = parseInt(cb.value);
+    if (cb.checked) { selectedIds.add(id); } else { selectedIds.delete(id); }
+    updateBulkToolbar();
+}
+
+function toggleSelectAll(masterCb) {
+    document.querySelectorAll('.row-cb').forEach(cb => {
+        cb.checked = masterCb.checked;
+        const id = parseInt(cb.value);
+        if (masterCb.checked) { selectedIds.add(id); } else { selectedIds.delete(id); }
+    });
+    updateBulkToolbar();
+}
+
+function clearAllSelections() {
+    selectedIds.clear();
+    document.querySelectorAll('.row-cb').forEach(cb => cb.checked = false);
+    const selectAll = document.getElementById('selectAllRows');
+    if (selectAll) selectAll.checked = false;
+    updateBulkToolbar();
+}
+
+function updateBulkToolbar() {
+    const toolbar = document.getElementById('bulkToolbar');
+    if (!toolbar) return;
+    const count = selectedIds.size;
+    document.getElementById('selectedCount').textContent = count;
+    toolbar.classList.toggle('show', count > 0);
+}
+
+function bulkDeleteSelected() {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Yakin ingin menghapus ${selectedIds.size} data terpilih? Tindakan ini tidak dapat dibatalkan.`)) return;
+
+    fetch('/api/data-plps/bulk-delete', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+        },
+        body: JSON.stringify({ ids: Array.from(selectedIds) })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            showToast(data.message);
+            selectedIds.clear();
+            updateBulkToolbar();
+            resetAndLoadTable();
+        } else {
+            alert('Gagal menghapus: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(err => alert('Error: ' + err.message));
+}
+
+function showToast(msg) {
+    const existing = document.querySelector('.toast');
+    if (existing) existing.remove();
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.innerHTML = `<i class="fas fa-check-circle"></i> ${msg}`;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+// === Edit Modal ===
+let editRowData = {};
+
+function openEditModal(id, btn) {
+    const tr = btn.closest('tr');
+    const cells = tr.querySelectorAll('td');
+    // Get data from the row cells (offset by 1 if admin because of checkbox column)
+    const offset = isAdmin ? 1 : 0;
+    editRowData = {
+        id: id,
+        kegiatan: cells[7 + offset]?.textContent?.trim() || '',
+        mitra: cells[8 + offset]?.textContent?.trim() || '',
+        penyelenggara: cells[9 + offset]?.textContent?.trim() || '',
+        semester: cells[10 + offset]?.textContent?.trim() || '',
+        tahun_ajaran: cells[11 + offset]?.textContent?.trim() || '',
+        dosen_pembimbing: cells[12 + offset]?.textContent?.trim() || '',
+        sks: cells[13 + offset]?.textContent?.trim() || '0',
+    };
+
+    document.getElementById('editRowId').value = id;
+    document.getElementById('editKegiatan').value = editRowData.kegiatan === '-' ? '' : editRowData.kegiatan;
+    document.getElementById('editMitra').value = editRowData.mitra === '-' ? '' : editRowData.mitra;
+    document.getElementById('editPenyelenggara').value = editRowData.penyelenggara;
+    document.getElementById('editSemester').value = editRowData.semester;
+    document.getElementById('editTahunAjaran').value = editRowData.tahun_ajaran;
+    document.getElementById('editDosen').value = editRowData.dosen_pembimbing === '-' ? '' : editRowData.dosen_pembimbing;
+    document.getElementById('editSks').value = parseInt(editRowData.sks) || 0;
+
+    document.getElementById('editModalOverlay').classList.add('show');
+}
+
+function closeEditModal() {
+    document.getElementById('editModalOverlay').classList.remove('show');
+}
+
+function saveEdit() {
+    const id = document.getElementById('editRowId').value;
+    const btn = document.getElementById('editSaveBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
+
+    const payload = {
+        kegiatan_nama: document.getElementById('editKegiatan').value.trim(),
+        mitra_nama: document.getElementById('editMitra').value.trim(),
+        penyelenggara: document.getElementById('editPenyelenggara').value,
+        semester: document.getElementById('editSemester').value,
+        tahun_ajaran: document.getElementById('editTahunAjaran').value,
+        dosen_pembimbing: document.getElementById('editDosen').value || null,
+        sks: parseInt(document.getElementById('editSks').value) || 0,
+    };
+
+    fetch(`/api/data-plps/${id}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(res => res.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save"></i> Simpan';
+        if (data.success) {
+            closeEditModal();
+            showToast('Data berhasil diperbarui');
+            resetAndLoadTable();
+        } else {
+            alert('Gagal menyimpan: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(err => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save"></i> Simpan';
+        alert('Error: ' + err.message);
+    });
+}
 </script>
 
 {{-- CHART.JS SCRIPTS --}}
@@ -870,68 +1184,7 @@ function getFakColor(name) {
     return fakultasColors[name.toUpperCase()] || '#9ca3af';
 }
 
-// 1. Mahasiswa per Fakultas (Bar)
-const fakLabels = @json($mahasiswaPerFakultas->pluck('nama_fakultas'));
-const fakData = @json($mahasiswaPerFakultas->pluck('total'));
-new Chart(document.getElementById('chartFakultas'), {
-    type: 'bar',
-    data: {
-        labels: fakLabels,
-        datasets: [{
-            label: 'Mahasiswa',
-            data: fakData,
-            backgroundColor: fakLabels.map(n => getFakColor(n)),
-            borderRadius: 6,
-            maxBarThickness: 48
-        }]
-    },
-    options: {
-        responsive: true,
-        plugins: {
-            legend: { display: false },
-            tooltip: { callbacks: { label: ctx => ctx.parsed.y.toLocaleString() + ' Mahasiswa' }}
-        },
-        scales: {
-            y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#f1f5f9' }},
-            x: { grid: { display: false }}
-        }
-    }
-});
-
-// 2. Top 7 Prodi (Horizontal Bar with gradient opacity)
-const prodiLabels = @json($topProdi->pluck('nama_prodi'));
-const prodiData = @json($topProdi->pluck('total'));
-const prodiColors = prodiLabels.map((_, i) => {
-    const opacity = 1 - (i * 0.1);
-    return `rgba(123,17,19,${Math.max(opacity, 0.3)})`;
-});
-new Chart(document.getElementById('chartProdi'), {
-    type: 'bar',
-    data: {
-        labels: prodiLabels,
-        datasets: [{
-            label: 'Mahasiswa',
-            data: prodiData,
-            backgroundColor: prodiColors,
-            borderRadius: 6,
-            maxBarThickness: 32
-        }]
-    },
-    options: {
-        indexAxis: 'y',
-        responsive: true,
-        plugins: {
-            legend: { display: false },
-            tooltip: { callbacks: { label: ctx => ctx.parsed.x.toLocaleString() + ' Mahasiswa' }}
-        },
-        scales: {
-            x: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#f1f5f9' }},
-            y: { grid: { display: false }}
-        }
-    }
-});
-
-// 3. Tren Per Semester (Line)
+// 1. Tren Per Semester (Line) — rendered first since it's at top
 const trenLabels = @json($semesters);
 const trenSeries = @json($trenSeries);
 const trenDatasets = trenSeries.map(s => ({
@@ -959,6 +1212,98 @@ new Chart(document.getElementById('chartTren'), {
             x: { grid: { display: false }}
         },
         interaction: { mode: 'nearest', axis: 'x', intersect: false }
+    }
+});
+
+// 2. Top 5 Fakultas (Horizontal Bar — bar chart miring)
+const fakLabels = @json($mahasiswaPerFakultas->pluck('nama_fakultas'));
+const fakData = @json($mahasiswaPerFakultas->pluck('total'));
+new Chart(document.getElementById('chartFakultas'), {
+    type: 'bar',
+    data: {
+        labels: fakLabels,
+        datasets: [{
+            label: 'Mahasiswa',
+            data: fakData,
+            backgroundColor: fakLabels.map(n => getFakColor(n)),
+            borderRadius: 6,
+            maxBarThickness: 32
+        }]
+    },
+    options: {
+        indexAxis: 'y',
+        responsive: true,
+        plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: ctx => ctx.parsed.x.toLocaleString() + ' Mahasiswa' }}
+        },
+        scales: {
+            x: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#f1f5f9' }},
+            y: { grid: { display: false }}
+        }
+    }
+});
+
+// 3. Top 5 Prodi (Horizontal Bar)
+const prodiLabels = @json($topProdi->pluck('nama_prodi'));
+const prodiData = @json($topProdi->pluck('total'));
+const prodiColors = prodiLabels.map((_, i) => {
+    const opacity = 1 - (i * 0.08);
+    return `rgba(123,17,19,${Math.max(opacity, 0.55)})`;
+});
+new Chart(document.getElementById('chartProdi'), {
+    type: 'bar',
+    data: {
+        labels: prodiLabels,
+        datasets: [{
+            label: 'Mahasiswa',
+            data: prodiData,
+            backgroundColor: prodiColors,
+            borderRadius: 6,
+            maxBarThickness: 32
+        }]
+    },
+    options: {
+        indexAxis: 'y',
+        responsive: true,
+        plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: ctx => ctx.parsed.x.toLocaleString() + ' Mahasiswa' }}
+        },
+        scales: {
+            x: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#f1f5f9' }},
+            y: { grid: { display: false }}
+        }
+    }
+});
+
+// 4. Top 5 Program (Horizontal Bar)
+const progLabels = @json($topProgram->pluck('nama_program'));
+const progData = @json($topProgram->pluck('total'));
+const progColors = ['#005A98', '#D3B048', '#31BAAD', '#109344', '#673DB0'];
+new Chart(document.getElementById('chartProgram'), {
+    type: 'bar',
+    data: {
+        labels: progLabels,
+        datasets: [{
+            label: 'Mahasiswa',
+            data: progData,
+            backgroundColor: progColors.slice(0, progLabels.length),
+            borderRadius: 6,
+            maxBarThickness: 32
+        }]
+    },
+    options: {
+        indexAxis: 'y',
+        responsive: true,
+        plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: ctx => ctx.parsed.x.toLocaleString() + ' Mahasiswa' }}
+        },
+        scales: {
+            x: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#f1f5f9' }},
+            y: { grid: { display: false }}
+        }
     }
 });
 </script>

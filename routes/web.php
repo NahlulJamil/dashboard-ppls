@@ -31,6 +31,8 @@ Route::middleware(['auth:admin', 'super_admin'])->group(function () {
 Route::get('/dashboard', [DataPlpsController::class, 'index']);
 Route::get('/api/filter-options', [DataPlpsController::class, 'getFilterOptions']);
 Route::get('/api/table-data', [DataPlpsController::class, 'tableData']);
+Route::put('/api/data-plps/{id}', [DataPlpsController::class, 'updateRow'])->middleware('auth:admin');
+Route::post('/api/data-plps/bulk-delete', [DataPlpsController::class, 'bulkDelete'])->middleware('auth:admin');
 
 // Data Input routes
 Route::get('/input-data', [DataPlpsController::class, 'inputData'])->middleware('auth:admin');
