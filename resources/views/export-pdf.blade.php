@@ -250,14 +250,13 @@
                 @endphp
                 @foreach($mahasiswaPerFakultas as $fak)
                     @php 
-                        $isOther = str_contains($fak->nama_fakultas, 'dll');
-                        $tag = $isOther ? 'Lain' : $fak->nama_fakultas;
+                        $tag = $fak->nama_fakultas;
                         $color = $fakColors[$fak->nama_fakultas] ?? '#64748b';
                     @endphp
                     <div class="bar-row">
                         <div class="bar-label" style="width:160px;display:flex;align-items:center">
                             <span class="fak-tag" style="background:{{ $color }}">{{ $tag }}</span>
-                            {{ $isOther ? $fak->nama_fakultas : 'Fak. '.$fak->nama_fakultas }}
+                            {{ $fak->nama_fakultas }}
                         </div>
                         <div class="bar-track">
                             <div class="bar-fill" style="background:{{ $color }};width:{{ $maxFak > 0 ? ($fak->total/$maxFak)*100 : 0 }}%"></div>

@@ -117,8 +117,31 @@
             </table>
         </div>
         <div class="modal-footer">
-
             <button class="btn btn-red" onclick="document.getElementById('errorModal').style.display='none'">Tutup</button>
+        </div>
+    </div>
+</div>
+@endif
+
+@if(session('error'))
+<div class="modal-overlay" id="genericErrorModal">
+    <div class="modal-box">
+        <div class="modal-header" style="background:linear-gradient(135deg,#ef4444,#dc2626);">
+            <div style="display:flex;align-items:center;gap:10px">
+                <span style="font-size:22px">⚠️</span>
+                <div>
+                    <div style="font-size:16px;font-weight:700">Terjadi Kesalahan</div>
+                </div>
+            </div>
+            <button class="close-btn" onclick="document.getElementById('genericErrorModal').style.display='none'">✕</button>
+        </div>
+        <div class="modal-body">
+            <div style="padding:20px; text-align:center; color:#374151; line-height:1.6">
+                {{ session('error') }}
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-red" onclick="document.getElementById('genericErrorModal').style.display='none'">Tutup</button>
         </div>
     </div>
 </div>

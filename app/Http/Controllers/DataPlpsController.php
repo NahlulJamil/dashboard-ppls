@@ -664,14 +664,7 @@ class DataPlpsController extends Controller
             ->groupBy('fakultas.nama_fakultas')
             ->orderByDesc('total')
             ->get();
-            
-        // Group remaining as "TUP, TUS, FKS, dll." if more than 8
-        $top8Fakultas = $mahasiswaPerFakultas->take(8);
-        if ($mahasiswaPerFakultas->count() > 8) {
-            $otherTotal = $mahasiswaPerFakultas->slice(8)->sum('total');
-            $top8Fakultas->push((object)['nama_fakultas' => 'TUP, TUS, FKS, dll.', 'total' => $otherTotal]);
-        }
-        $mahasiswaPerFakultas = $top8Fakultas;
+
 
         $topProdi = $this->chartQuery($request)
             ->select('prodis.nama_prodi', DB::raw('COUNT(DISTINCT data_plps.nim) as total'))

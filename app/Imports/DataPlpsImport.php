@@ -20,6 +20,7 @@ class DataPlpsImport implements ToCollection
     public $errors = [];
     public $validateOnly = false;
     public $validRowCount = 0;
+    public $processedKeys = [];
 
     public function __construct(bool $validateOnly = false)
     {
@@ -160,6 +161,13 @@ class DataPlpsImport implements ToCollection
                 );
 
                 // === CEK DUPLIKAT ===
+                $duplicateKey = "{$nimInput}_{$program->id}_{$semesterInput}_{$tahunAjaranInput}";
+                
+                if (isset($this->processedKeys[$duplicateKey])) {
+                    throw new Exception("Data duplikat di dalam file yang sama pada baris ke-{$this->processedKeys[$duplicateKey]} (NIM: {$nimInput}, Program: {$programInput}, Semester: {$semesterInput}, TA: {$tahunAjaranInput})");
+                }
+                $this->processedKeys[$duplicateKey] = $line;
+
                 $exists = DataPlps::where('nim', $nimInput)
                     ->where('program_id', $program->id)
                     ->where('semester', $semesterInput)
