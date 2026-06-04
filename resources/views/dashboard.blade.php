@@ -851,11 +851,16 @@ document.addEventListener('DOMContentLoaded', function() {
             <tbody id="tableBody">
             </tbody>
         </table>
-        <div class="scroll-sentinel" id="scrollSentinel"></div>
+        <!-- No sentinel needed for standard pagination -->
     </div>
-    <div class="table-info" id="tableInfo" style="display:none">
-        <span>Menampilkan <span class="count" id="tableShown">0</span> dari <span class="count" id="tableTotal">0</span> data</span>
-        <span id="tablePageInfo"></span>
+    <div class="table-info" id="tableInfo" style="display:none; justify-content:flex-end; align-items:center; padding: 15px 20px;">
+        <div class="pagination-controls" style="display:flex; gap:15px; align-items:center;">
+            <span id="pageText" style="font-size:13px; font-weight:600; color:#475569">0 - 0 / 0</span>
+            <div style="display:flex; gap:5px;">
+                <button class="btn btn-outline" id="prevPageBtn" onclick="prevPage()" style="padding:6px 12px" title="Previous Page"><i class="fas fa-chevron-left"></i></button>
+                <button class="btn btn-outline" id="nextPageBtn" onclick="nextPage()" style="padding:6px 12px" title="Next Page"><i class="fas fa-chevron-right"></i></button>
+            </div>
+        </div>
     </div>
     <div class="table-status" id="tableStatus"><i class="fas fa-spinner fa-spin"></i> Memuat data...</div>
 </div>
@@ -1000,15 +1005,11 @@ function loadTablePage(page) {
     .then(data => {
         const tbody = document.getElementById('tableBody');
 
-        // Remove skeleton rows
-        tbody.querySelectorAll('.skeleton-row').forEach(r => r.remove());
+        // Remove skeleton rows and old data
+        tbody.innerHTML = '';
+        tableLoadedCount = 0;
 
-        if (page === 1) {
-            tbody.innerHTML = '';
-            tableLoadedCount = 0;
-        }
-
-        if (data.data.length === 0 && page === 1) {
+        if (data.data.length === 0) {
             tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center;padding:30px;color:#94a3b8">Tidak ada data yang sesuai</td></tr>`;
             statusEl.style.display = 'none';
             document.getElementById('tableInfo').style.display = 'none';
@@ -1048,30 +1049,38 @@ function loadTablePage(page) {
             tbody.appendChild(tr);
         });
 
-        tableLoadedCount += data.data.length;
+        tableLoadedCount = data.data.length;
         tablePage = data.current_page;
         tableLastPage = data.last_page;
         tableTotal = data.total;
+        let start = data.from || 0;
+        let end = data.to || 0;
 
         // Update info bar
         const infoEl = document.getElementById('tableInfo');
         infoEl.style.display = 'flex';
-        document.getElementById('tableShown').textContent = tableLoadedCount.toLocaleString();
-        document.getElementById('tableTotal').textContent = tableTotal.toLocaleString();
-        document.getElementById('tablePageInfo').textContent = tablePage < tableLastPage ? 'Scroll ke bawah untuk memuat lebih banyak...' : '';
-
-        // Update status
-        if (tablePage >= tableLastPage) {
-            if (tableTotal > 0) {
-                statusEl.innerHTML = '<i class="fas fa-check-circle" style="color:#16a34a"></i> Semua data sudah ditampilkan';
-                statusEl.style.display = '';
-                setTimeout(() => { statusEl.style.display = 'none'; }, 2000);
-            } else {
-                statusEl.style.display = 'none';
-            }
+        document.getElementById('pageText').textContent = `${start} - ${end} / ${tableTotal}`;
+        
+        const prevBtn = document.getElementById('prevPageBtn');
+        const nextBtn = document.getElementById('nextPageBtn');
+        
+        if(tablePage <= 1) {
+            prevBtn.disabled = true;
+            prevBtn.style.opacity = '0.5';
         } else {
-            statusEl.style.display = 'none';
+            prevBtn.disabled = false;
+            prevBtn.style.opacity = '1';
         }
+        
+        if(tablePage >= tableLastPage) {
+            nextBtn.disabled = true;
+            nextBtn.style.opacity = '0.5';
+        } else {
+            nextBtn.disabled = false;
+            nextBtn.style.opacity = '1';
+        }
+
+        statusEl.style.display = 'none';
 
         tableLoading = false;
     })
@@ -1113,18 +1122,16 @@ function esc(str) {
     return div.innerHTML;
 }
 
-// Intersection Observer for infinite scroll
-const sentinel = document.getElementById('scrollSentinel');
-if (sentinel) {
-    const observer = new IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting && !tableLoading && tablePage < tableLastPage) {
-            loadTablePage(tablePage + 1);
-        }
-    }, {
-        root: document.getElementById('tableWrap'),
-        rootMargin: '200px'
-    });
-    observer.observe(sentinel);
+function prevPage() {
+    if (tablePage > 1 && !tableLoading) {
+        loadTablePage(tablePage - 1);
+    }
+}
+
+function nextPage() {
+    if (tablePage < tableLastPage && !tableLoading) {
+        loadTablePage(tablePage + 1);
+    }
 }
 
 // Search on Enter key

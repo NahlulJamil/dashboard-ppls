@@ -68,8 +68,12 @@
         .doughnut-placeholder {
             width: 70px; height: 70px; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
-            border: 8px solid #e2e8f0; position: relative;
+            position: relative;
         }
+        .doughnut-placeholder::before {
+            content: ''; position: absolute; width: 54px; height: 54px; background: #fff; border-radius: 50%;
+        }
+        .doughnut-text-container { position: absolute; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         .doughnut-text { font-size: 14px; font-weight: 800; line-height: 1; text-align: center; }
         .doughnut-sub { font-size: 8px; font-weight: 400; color: #64748b; }
         .mitra-stats { flex: 1; font-size: 10px; }
@@ -171,14 +175,15 @@
                     <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#2173b5"></span> Mitra Eksternal
                 </div>
                 <div class="mitra-header">
-                    <div class="doughnut-placeholder" style="border-color:#bfdbfe;border-left-color:#2173b5;border-bottom-color:#2173b5">
-                        <div style="position:absolute">
-                            <div class="doughnut-text">{{ $totalMitra > 0 ? round(($totalMitraEksternal/$totalMitra)*100) : 0 }}%</div>
+                    @php $pctEks = $totalMitra > 0 ? round(($totalMitraEksternal/$totalMitra)*100) : 0; @endphp
+                    <div class="doughnut-placeholder" style="background: conic-gradient(#2173b5 0% {{ $pctEks }}%, #bfdbfe {{ $pctEks }}% 100%);">
+                        <div class="doughnut-text-container">
+                            <div class="doughnut-text">{{ $pctEks }}%</div>
                             <div class="doughnut-sub">dari total</div>
                         </div>
                     </div>
                     <div class="mitra-stats">
-                        Total Instansi Unik<br>
+                        Total Instansi<br>
                         <strong>{{ number_format($totalMitraEksternal, 0, ',', '.') }} Instansi</strong>
                     </div>
                 </div>
@@ -202,14 +207,15 @@
                     <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#0f766e"></span> Mitra Internal
                 </div>
                 <div class="mitra-header">
-                    <div class="doughnut-placeholder" style="border-color:#a7f3d0;border-left-color:#0f766e">
-                        <div style="position:absolute">
-                            <div class="doughnut-text">{{ $totalMitra > 0 ? round(($totalMitraInternal/$totalMitra)*100) : 0 }}%</div>
+                    @php $pctInt = $totalMitra > 0 ? round(($totalMitraInternal/$totalMitra)*100) : 0; @endphp
+                    <div class="doughnut-placeholder" style="background: conic-gradient(#0f766e 0% {{ $pctInt }}%, #a7f3d0 {{ $pctInt }}% 100%);">
+                        <div class="doughnut-text-container">
+                            <div class="doughnut-text">{{ $pctInt }}%</div>
                             <div class="doughnut-sub">dari total</div>
                         </div>
                     </div>
                     <div class="mitra-stats">
-                        Total Instansi Unik<br>
+                        Total Instansi<br>
                         <strong>{{ number_format($totalMitraInternal, 0, ',', '.') }} Instansi</strong>
                     </div>
                 </div>

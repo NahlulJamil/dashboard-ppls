@@ -47,8 +47,8 @@
             </div>
 
             <button type="submit"
-                class="w-full mt-4 text-white font-medium py-3 px-4 shadow-sm hover:opacity-90 transition"
-                style="background-color: #8bb4f6; border-radius: 20px; font-size: 14px;">
+                class="w-full mt-4 text-white font-medium py-3 px-4 shadow-sm hover:opacity-90 transition cursor-pointer"
+                style="background-color: #358ffcff; border-radius: 20px; font-size: 14px;">
                 Login
             </button>
         </form>

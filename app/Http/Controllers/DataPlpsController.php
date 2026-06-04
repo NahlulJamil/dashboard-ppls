@@ -234,7 +234,7 @@ class DataPlpsController extends Controller
             $query->where('nim', 'LIKE', '%' . $request->search_nim . '%');
         }
 
-        $paginated = $query->orderBy('id', 'desc')->paginate(50);
+        $paginated = $query->orderBy('id', 'desc')->paginate(100);
 
         // Transform data for frontend
         $rows = $paginated->getCollection()->map(function ($row, $index) use ($paginated) {
@@ -608,6 +608,12 @@ class DataPlpsController extends Controller
      */
     public function exportExcel(Request $request)
     {
+        // Apply default filter if no filters are selected (first load behavior)
+        if (!$request->has('program_id') && !$request->has('sub_program_id') && !$request->has('fakultas_id') && !$request->has('prodi_id') && !$request->has('penyelenggara') && !$request->has('mitra_id') && !$request->has('semester_ta') && !$request->has('tahun_ajaran')) {
+            $defaultSemesterTa = DataPlps::select('semester_ta')->distinct()->orderBy('semester_ta', 'desc')->limit(5)->pluck('semester_ta')->toArray();
+            $request->merge(['semester_ta' => $defaultSemesterTa]);
+        }
+
         $query = DataPlps::query();
         $this->applyEloquentFilters($query, $request);
         $query->with(['program', 'subProgram', 'mahasiswa.prodi.fakultas', 'kegiatan', 'mitra']);
@@ -620,6 +626,13 @@ class DataPlpsController extends Controller
      */
     public function exportPdf(Request $request)
     {
+        // Apply default filter if no filters are selected
+        $isFirstLoad = !$request->has('program_id') && !$request->has('sub_program_id') && !$request->has('fakultas_id') && !$request->has('prodi_id') && !$request->has('penyelenggara') && !$request->has('mitra_id') && !$request->has('semester_ta') && !$request->has('tahun_ajaran');
+        if ($isFirstLoad) {
+            $defaultSemesterTa = DataPlps::select('semester_ta')->distinct()->orderBy('semester_ta', 'desc')->limit(5)->pluck('semester_ta')->toArray();
+            $request->merge(['semester_ta' => $defaultSemesterTa]);
+        }
+
         // Re-use logic from index() to get chart data for PDF
         $baseQuery = $this->chartQuery($request);
         
