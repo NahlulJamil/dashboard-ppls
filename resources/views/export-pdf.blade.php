@@ -25,10 +25,11 @@
         .header-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
         .logo-area { display: flex; align-items: center; gap: 12px; }
         .logo-circle {
-            width: 40px; height: 40px; border-radius: 50%; background: #eab308;
-            color: #1e3a5f; display: flex; align-items: center; justify-content: center;
-            font-weight: 800; font-size: 16px;
+            width: 40px; height: 40px; border-radius: 50%; background: #fff;
+            display: flex; align-items: center; justify-content: center;
+            overflow: hidden; border: 1px solid #e2e8f0;
         }
+        .logo-circle img { width: 100%; height: 100%; object-fit: contain; }
         .logo-text { font-family: 'Merriweather', serif; color: #1e3a5f; }
         .logo-text-title { font-size: 14px; font-weight: 700; }
         .logo-text-sub { font-size: 10px; color: #64748b; font-family: 'Inter', sans-serif; }
@@ -111,10 +112,12 @@
         <!-- HEADER -->
         <div class="header-top">
             <div class="logo-area">
-                <div class="logo-circle">TU</div>
+                <div class="logo-circle">
+                    <img src="{{ asset('images/bpa.png') }}" alt="BPA">
+                </div>
                 <div>
-                    <div class="logo-text logo-text-title">Telkom University</div>
-                    <div class="logo-text-sub">Sistem Informasi Akademik - MBKM</div>
+                    <div class="logo-text logo-text-title">Badan Pengembangan Akademik</div>
+                    <div class="logo-text-sub">Sistem Informasi PLPS</div>
                 </div>
             </div>
             <div class="header-info">
@@ -126,9 +129,9 @@
         
         <!-- BANNER -->
         <div class="banner">
-            <div class="banner-title">Laporan Data Mahasiswa MBKM Berdampak</div>
+            <div class="banner-title">Laporan Data Mahasiswa Pembelajaran diluar Program Studi</div>
             <div class="banner-sub">
-                Program MBKM &bull; {{ request('fakultas_id') ? count(request('fakultas_id', [])) . ' Fakultas' : 'Semua Fakultas' }} &bull; Tahun Ajaran {{ request('tahun_ajaran') ? implode(', ', (array)request('tahun_ajaran')) : 'Semua' }}
+                Program PLPS &bull; {{ request('fakultas_id') ? count(request('fakultas_id', [])) . ' Fakultas' : 'Semua Fakultas' }} &bull; Tahun Ajaran {{ request('tahun_ajaran') ? implode(', ', (array)request('tahun_ajaran')) : 'Semua' }}
             </div>
         </div>
         
@@ -235,6 +238,7 @@
         </div>
 
         <!-- FAKULTAS & PRODI -->
+        <div style="border-top: 1px solid #e2e8f0; margin-top: 10px;"></div>
         <div class="section-title">Pengiriman Mahasiswa Per Fakultas & Program Studi</div>
         <div class="row" style="margin-bottom:30px">
             <!-- Fakultas -->
@@ -245,7 +249,7 @@
                     $fakColors = [
                         'FIF'=>'#c7a12c','FEB'=>'#239e91','FTE'=>'#004f86',
                         'FKB'=>'#cc420c','FIT'=>'#00cc52','FRI'=>'#0d8039',
-                        'FIK'=>'#59329e'
+                        'FIK'=>'#ea580c','FKS'=>'#59329e','TUP'=>'#b91c1c','TUS'=>'#6b7280'
                     ];
                 @endphp
                 @foreach($mahasiswaPerFakultas as $fak)
@@ -276,7 +280,7 @@
                             {{ $pr->nama_prodi }}
                         </div>
                         <div class="bar-track">
-                            <div class="bar-fill" style="background:#3b82f6;width:{{ $maxProdi > 0 ? ($pr->total/$maxProdi)*100 : 0 }}%"></div>
+                            <div class="bar-fill" style="background:#7B1113;width:{{ $maxProdi > 0 ? ($pr->total/$maxProdi)*100 : 0 }}%"></div>
                         </div>
                         <div class="bar-val">{{ number_format($pr->total, 0, ',', '.') }}</div>
                     </div>
@@ -285,6 +289,7 @@
         </div>
 
         <!-- PROGRAM -->
+        <div style="border-top: 1px solid #e2e8f0; margin-top: 10px;"></div>
         <div class="section-title">Distribusi Per Program MBKM</div>
         <div style="margin-bottom:30px">
             @php 
@@ -303,6 +308,7 @@
         </div>
 
         <!-- MAGANG BIDANG KERJA -->
+        <div style="border-top: 1px solid #e2e8f0; margin-top: 10px;"></div>
         <div class="section-title">Posisi / Bidang Kerja Mahasiswa Magang</div>
         <div style="font-size:10px;color:#475569;margin-bottom:15px">Berdasarkan kolom Nama Kegiatan - hanya untuk program Magang/Praktik Industri ({{ number_format($totalMagang, 0, ',', '.') }} mahasiswa)</div>
         
@@ -335,7 +341,7 @@
         <!-- FOOTER -->
         <div class="footer">
             <div>
-                <strong>Telkom University</strong> &bull; Sistem Informasi MBKM Mahasiswa Berdampak<br>
+                <strong>Badan Pengembangan Akademik</strong> &bull; Sistem Informasi PLPS<br>
                 Dokumen ini digenerate otomatis dan bersifat resmi
             </div>
             <div style="text-align:right">

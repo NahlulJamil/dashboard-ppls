@@ -1330,7 +1330,8 @@ function doExport(type) {
 // Color map for fakultas
 const fakultasColors = {
     'FTE':'#004f86','FIF':'#c7a12c','FEB':'#239e91','FRI':'#0d8039',
-    'FKS':'#59329e','FIK':'#cc420c','FIT':'#00cc52'
+    'FKS':'#59329e','FIK':'#ea580c','FIT':'#00cc52','FKB':'#cc420c',
+    'TUP':'#b91c1c','TUS':'#6b7280'
 };
 function getFakColor(name) {
     return fakultasColors[name.toUpperCase()] || '#9ca3af';
@@ -1418,13 +1419,18 @@ new Chart(document.getElementById('chartProdi'), {
     options: {
         indexAxis: 'y',
         responsive: true,
+        layout: { padding: { left: 5 } },
         plugins: {
             legend: { display: false },
             tooltip: { callbacks: { label: ctx => ctx.parsed.x.toLocaleString() + ' Mahasiswa' }}
         },
         scales: {
             x: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#f1f5f9' }},
-            y: { grid: { display: false }}
+            y: { grid: { display: false }, ticks: { font: { size: 11 }, autoSkip: false, callback: function(value) {
+                const label = this.getLabelForValue(value);
+                if (label.length > 15) return label.substring(0, 15) + '...';
+                return label;
+            }}}
         }
     }
 });
@@ -1448,13 +1454,18 @@ new Chart(document.getElementById('chartProgram'), {
     options: {
         indexAxis: 'y',
         responsive: true,
+        layout: { padding: { left: 5 } },
         plugins: {
             legend: { display: false },
             tooltip: { callbacks: { label: ctx => ctx.parsed.x.toLocaleString() + ' Mahasiswa' }}
         },
         scales: {
             x: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#f1f5f9' }},
-            y: { grid: { display: false }}
+            y: { grid: { display: false }, ticks: { font: { size: 11 }, autoSkip: false, callback: function(value) {
+                const label = this.getLabelForValue(value);
+                if (label.length > 25) return label.substring(0, 25) + '...';
+                return label;
+            }}}
         }
     }
 });

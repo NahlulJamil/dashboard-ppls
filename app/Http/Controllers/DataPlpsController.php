@@ -544,6 +544,7 @@ class DataPlpsController extends Controller
 
     /**
      * Step 2a: Show the confirmation page.
+     * Also reads raw Excel rows for a read-only preview table.
      */
     public function showConfirmImport()
     {
@@ -555,7 +556,42 @@ class DataPlpsController extends Controller
             return redirect('/input-data')->with('error', 'Tidak ada data untuk dikonfirmasi. Silakan upload ulang.');
         }
 
-        return view('confirm-import', compact('rowCount', 'originalName'));
+        // Build a lightweight preview from the stored file (raw rows, no DB writes).
+        $previewRows = [];
+        try {
+            $fullPath = \Illuminate\Support\Facades\Storage::path($storedPath);
+            $rawCollection = Excel::toCollection(null, $fullPath)->first();
+
+            if ($rawCollection) {
+                foreach ($rawCollection as $index => $row) {
+                    if ($index == 0) continue; // skip header
+
+                    // Preserve Excel row number (header = row 1, data starts at row 2)
+                    $previewRows[] = [
+                        'excel_row'        => $index + 1,
+                        'program'          => trim($row[0]  ?? ''),
+                        'sub_program'      => trim($row[1]  ?? ''),
+                        'fakultas'         => trim($row[2]  ?? ''),
+                        'prodi'            => trim($row[3]  ?? ''),
+                        'nim'              => trim($row[4]  ?? ''),
+                        'nama'             => trim($row[5]  ?? ''),
+                        'tahun_ajaran'     => trim($row[6]  ?? ''),
+                        'semester'         => trim($row[7]  ?? ''),
+                        'semester_ta'      => trim($row[8]  ?? ''),
+                        'kegiatan'         => trim($row[9]  ?? ''),
+                        'penyelenggara'    => trim($row[10] ?? ''),
+                        'mitra'            => trim($row[11] ?? ''),
+                        'dosen_pembimbing' => trim($row[12] ?? ''),
+                        'sks'              => trim($row[13] ?? ''),
+                    ];
+                }
+            }
+        } catch (\Exception $e) {
+            // If preview fails, still show confirm page without table
+            $previewRows = [];
+        }
+
+        return view('confirm-import', compact('rowCount', 'originalName', 'previewRows'));
     }
 
     /**
