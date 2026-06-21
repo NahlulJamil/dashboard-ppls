@@ -42,6 +42,9 @@
     .ms-option:hover .ms-count{background:#fecaca;color:#991b1b}
     .ms-no-result{padding:16px;text-align:center;color:#94a3b8;font-size:12px;font-style:italic}
 
+    /* Unavailable options (no data for current filter) */
+    .ms-option.unavailable{opacity:.5}
+
     /* Active Filter Tags */
     .filter-tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
     .filter-tag{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;background:linear-gradient(135deg,#fef2f2,#fff1f2);border:1px solid #fecaca;border-radius:20px;font-size:12px;font-weight:500;color:#991b1b;animation:tagIn .2s ease}
@@ -171,7 +174,7 @@
                     <div class="ms-options">
                         @foreach($programs as $p)
                         @php $isChecked = is_array(request('program_id')) && in_array($p->id, request('program_id')); @endphp
-                        <label class="ms-option" data-id="{{ $p->id }}">
+                        <label class="ms-option" data-id="{{ $p->id }}" data-initial-count="{{ $p->total }}">
                             <input type="checkbox" name="program_id[]" value="{{ $p->id }}" {{ $isChecked ? 'checked' : '' }} onchange="updateDropdown(this)">
                             <span>{{ $p->nama_program }}</span>
                             <span class="ms-count">{{ $p->total }}</span>
@@ -195,7 +198,7 @@
                     <div class="ms-options">
                         @foreach($subPrograms as $sp)
                         @php $isChecked = is_array(request('sub_program_id')) && in_array($sp->id, request('sub_program_id')); @endphp
-                        <label class="ms-option" data-id="{{ $sp->id }}">
+                        <label class="ms-option" data-id="{{ $sp->id }}" data-initial-count="{{ $sp->total }}">
                             <input type="checkbox" name="sub_program_id[]" value="{{ $sp->id }}" {{ $isChecked ? 'checked' : '' }} onchange="updateDropdown(this)">
                             <span>{{ $sp->nama_sub_program }}</span>
                             <span class="ms-count">{{ $sp->total }}</span>
@@ -219,7 +222,7 @@
                     <div class="ms-options">
                         @foreach($fakultas as $f)
                         @php $isChecked = is_array(request('fakultas_id')) && in_array($f->id, request('fakultas_id')); @endphp
-                        <label class="ms-option" data-id="{{ $f->id }}">
+                        <label class="ms-option" data-id="{{ $f->id }}" data-initial-count="{{ $f->total }}">
                             <input type="checkbox" name="fakultas_id[]" value="{{ $f->id }}" {{ $isChecked ? 'checked' : '' }} onchange="updateDropdown(this)">
                             <span>{{ $f->nama_fakultas }}</span>
                             <span class="ms-count">{{ $f->total }}</span>
@@ -243,7 +246,7 @@
                     <div class="ms-options">
                         @foreach($prodi as $pr)
                         @php $isChecked = is_array(request('prodi_id')) && in_array($pr->id, request('prodi_id')); @endphp
-                        <label class="ms-option" data-id="{{ $pr->id }}">
+                        <label class="ms-option" data-id="{{ $pr->id }}" data-initial-count="{{ $pr->total }}">
                             <input type="checkbox" name="prodi_id[]" value="{{ $pr->id }}" {{ $isChecked ? 'checked' : '' }} onchange="updateDropdown(this)">
                             <span>{{ $pr->nama_prodi }}</span>
                             <span class="ms-count">{{ $pr->total }}</span>
@@ -269,12 +272,12 @@
                             $countEksternal = \App\Models\DataPlps::where('penyelenggara', 'Eksternal')->count();
                             $countInternal = \App\Models\DataPlps::where('penyelenggara', 'Internal')->count();
                         @endphp
-                        <label class="ms-option" data-id="Eksternal">
+                        <label class="ms-option" data-id="Eksternal" data-initial-count="{{ $countEksternal }}">
                             <input type="checkbox" name="penyelenggara[]" value="Eksternal" {{ in_array('Eksternal', $penyelenggaraValues) ? 'checked' : '' }} onchange="updateDropdown(this)">
                             <span>Eksternal</span>
                             <span class="ms-count">{{ $countEksternal }}</span>
                         </label>
-                        <label class="ms-option" data-id="Internal">
+                        <label class="ms-option" data-id="Internal" data-initial-count="{{ $countInternal }}">
                             <input type="checkbox" name="penyelenggara[]" value="Internal" {{ in_array('Internal', $penyelenggaraValues) ? 'checked' : '' }} onchange="updateDropdown(this)">
                             <span>Internal</span>
                             <span class="ms-count">{{ $countInternal }}</span>
@@ -297,7 +300,7 @@
                     <div class="ms-options">
                         @foreach($allMitra as $m)
                         @php $isChecked = is_array(request('mitra_id')) && in_array($m->id, request('mitra_id')); @endphp
-                        <label class="ms-option" data-id="{{ $m->id }}">
+                        <label class="ms-option" data-id="{{ $m->id }}" data-initial-count="{{ $m->total }}">
                             <input type="checkbox" name="mitra_id[]" value="{{ $m->id }}" {{ $isChecked ? 'checked' : '' }} onchange="updateDropdown(this)">
                             <span>{{ $m->nama_mitra }}</span>
                             <span class="ms-count">{{ $m->total }}</span>
@@ -326,12 +329,12 @@
                     </div>
                     <div class="ms-search"><input type="text" placeholder="Cari semester TA..." oninput="searchOptions(this)"></div>
                     <div class="ms-options">
-                        @foreach($allSemesterTa ?? [] as $sta)
-                        @php $isChecked = in_array($sta, $semesterTaValues); @endphp
-                        <label class="ms-option" data-id="{{ $sta }}">
-                            <input type="checkbox" name="semester_ta[]" value="{{ $sta }}" {{ $isChecked ? 'checked' : '' }} onchange="updateDropdown(this)">
-                            <span>{{ $sta }}</span>
-                            <span class="ms-count">{{ $m->total }}</span>
+                        @foreach($allSemesterTa ?? [] as $staObj)
+                        @php $isChecked = in_array($staObj->semester_ta, $semesterTaValues); @endphp
+                        <label class="ms-option" data-id="{{ $staObj->semester_ta }}" data-initial-count="{{ $staObj->total }}">
+                            <input type="checkbox" name="semester_ta[]" value="{{ $staObj->semester_ta }}" {{ $isChecked ? 'checked' : '' }} onchange="updateDropdown(this)">
+                            <span>{{ $staObj->semester_ta }}</span>
+                            <span class="ms-count">{{ $staObj->total }}</span>
                         </label>
                         @endforeach
                     </div>
@@ -350,11 +353,12 @@
                     </div>
                     <div class="ms-search"><input type="text" placeholder="Cari tahun ajaran..." oninput="searchOptions(this)"></div>
                     <div class="ms-options">
-                        @foreach($allTahunAjaran ?? [] as $ta)
-                        @php $isChecked = is_array(request('tahun_ajaran')) && in_array($ta, request('tahun_ajaran')); @endphp
-                        <label class="ms-option" data-id="{{ $ta }}">
-                            <input type="checkbox" name="tahun_ajaran[]" value="{{ $ta }}" {{ $isChecked ? 'checked' : '' }} onchange="updateDropdown(this)">
-                            <span>{{ $ta }}</span>
+                        @foreach($allTahunAjaran ?? [] as $taObj)
+                        @php $isChecked = is_array(request('tahun_ajaran')) && in_array($taObj->tahun_ajaran, request('tahun_ajaran')); @endphp
+                        <label class="ms-option" data-id="{{ $taObj->tahun_ajaran }}" data-initial-count="{{ $taObj->total }}">
+                            <input type="checkbox" name="tahun_ajaran[]" value="{{ $taObj->tahun_ajaran }}" {{ $isChecked ? 'checked' : '' }} onchange="updateDropdown(this)">
+                            <span>{{ $taObj->tahun_ajaran }}</span>
+                            <span class="ms-count">{{ $taObj->total }}</span>
                         </label>
                         @endforeach
                     </div>
@@ -454,13 +458,11 @@ function updateSelectAllState(panel) {
     selectAll.indeterminate = checked.length > 0 && checked.length < visible.length;
 }
 
-function updateDropdown(changedCb) {
-    const dropdown = changedCb.closest('.ms-dropdown');
+function refreshTriggerLabel(dropdown) {
     const panel = dropdown.querySelector('.ms-panel');
     const trigger = dropdown.querySelector('.ms-trigger');
     const label = trigger.querySelector('.ms-label');
     const dataLabel = dropdown.dataset.label;
-    // Count only visible (not unavailable or at least available) checkboxes
     const allCbs = panel.querySelectorAll('.ms-options input[type=checkbox]');
     const checked = panel.querySelectorAll('.ms-options input[type=checkbox]:checked');
     const visibleCbs = panel.querySelectorAll('.ms-option:not(.unavailable) input[type=checkbox]');
@@ -483,7 +485,13 @@ function updateDropdown(changedCb) {
         badge.textContent = checked.length;
         trigger.insertBefore(badge, trigger.querySelector('.ms-arrow'));
     }
+}
 
+function updateDropdown(changedCb) {
+    const dropdown = changedCb.closest('.ms-dropdown');
+    const panel = dropdown.querySelector('.ms-panel');
+
+    refreshTriggerLabel(dropdown);
     updateSelectAllState(panel);
     updateFilterTags();
 
@@ -547,14 +555,22 @@ function fetchFilterOptions() {
         const filters = getActiveFilters();
         const hasAnyFilter = Object.keys(filters).length > 0;
 
-        // If no filter is active, reset all dropdowns to show all options
+        // If no filter is active, reset all dropdowns to show all options with initial counts
         if (!hasAnyFilter) {
             document.querySelectorAll('.ms-dropdown').forEach(dropdown => {
                 dropdown.classList.remove('filter-loading');
                 dropdown.querySelectorAll('.ms-option').forEach(opt => {
                     opt.classList.remove('unavailable');
+                    const countEl = opt.querySelector('.ms-count');
+                    if (countEl) {
+                        countEl.textContent = opt.dataset.initialCount || '0';
+                    }
                 });
+                const panel = dropdown.querySelector('.ms-panel');
+                if (panel) updateSelectAllState(panel);
+                refreshTriggerLabel(dropdown);
             });
+            updateFilterTags();
             return;
         }
 
@@ -596,28 +612,28 @@ function fetchFilterOptions() {
                     const countEl = optEl.querySelector('.ms-count');
                     const cb = optEl.querySelector('input[type=checkbox]');
 
+                    if (cb) cb.disabled = false;
                     if (availableMap.hasOwnProperty(optId)) {
                         // Option is available
                         optEl.classList.remove('unavailable');
-                        if (cb) cb.disabled = false;
                         if (countEl) countEl.textContent = availableMap[optId];
                     } else {
-                        // Option is NOT available — disable it completely
+                        // Option has no data under the current filters — show 0 and make it faded
                         optEl.classList.add('unavailable');
-                        if (cb) {
-                            cb.checked = false;
-                            cb.disabled = true;
-                        }
                         if (countEl) countEl.textContent = '0';
                     }
                 });
 
-                // Update select-all state
+                // Update select-all state and trigger label
                 const panel = dropdown.querySelector('.ms-panel');
                 if (panel) updateSelectAllState(panel);
+                refreshTriggerLabel(dropdown);
 
                 dropdown.classList.remove('filter-loading');
             });
+
+            // Update filter tags after all dropdowns are updated
+            updateFilterTags();
         })
         .catch(err => {
             if (err.name !== 'AbortError') {
@@ -633,32 +649,8 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.ms-dropdown').forEach(dropdown => {
         const firstCb = dropdown.querySelector('.ms-options input[type=checkbox]');
         if (firstCb) {
-            // Initialize visual state without triggering AJAX
+            refreshTriggerLabel(dropdown);
             const panel = dropdown.querySelector('.ms-panel');
-            const trigger = dropdown.querySelector('.ms-trigger');
-            const label = trigger.querySelector('.ms-label');
-            const dataLabel = dropdown.dataset.label;
-            const checked = panel.querySelectorAll('.ms-options input[type=checkbox]:checked');
-            const total = panel.querySelectorAll('.ms-options input[type=checkbox]');
-
-            const oldBadge = trigger.querySelector('.ms-badge');
-            if (oldBadge) oldBadge.remove();
-
-            if (checked.length === 0) {
-                label.textContent = 'Semua ' + dataLabel;
-                trigger.classList.remove('has-selection');
-            } else if (checked.length === 1) {
-                label.textContent = checked[0].closest('.ms-option').querySelector('span').textContent;
-                trigger.classList.add('has-selection');
-            } else {
-                label.textContent = dataLabel;
-                trigger.classList.add('has-selection');
-                const badge = document.createElement('span');
-                badge.className = 'ms-badge';
-                badge.textContent = checked.length;
-                trigger.insertBefore(badge, trigger.querySelector('.ms-arrow'));
-            }
-
             updateSelectAllState(panel);
         }
     });

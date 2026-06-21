@@ -58,23 +58,23 @@ class DataPlpsController extends Controller
             ->orderBy('mitras.nama_mitra')
             ->get();
 
-        // Semester TA & Tahun Ajaran filter options
+        // Semester TA & Tahun Ajaran filter options (with counts)
         $allSemesterTa = DB::table('data_plps')
-            ->select('semester_ta')
-            ->distinct()
+            ->select('semester_ta', DB::raw('COUNT(id) as total'))
             ->whereNotNull('semester_ta')
+            ->groupBy('semester_ta')
             ->orderBy('semester_ta')
-            ->pluck('semester_ta');
+            ->get();
 
         $allTahunAjaran = DB::table('data_plps')
-            ->select('tahun_ajaran')
-            ->distinct()
+            ->select('tahun_ajaran', DB::raw('COUNT(id) as total'))
             ->whereNotNull('tahun_ajaran')
+            ->groupBy('tahun_ajaran')
             ->orderBy('tahun_ajaran')
-            ->pluck('tahun_ajaran');
+            ->get();
 
         // Default: 5 semester TA terbaru (auto-checked saat pertama kali buka)
-        $defaultSemesterTa = $allSemesterTa->sortDesc()->take(5)->values()->toArray();
+        $defaultSemesterTa = $allSemesterTa->sortByDesc('semester_ta')->take(5)->pluck('semester_ta')->values()->toArray();
 
         if (!$hasData) {
             return view('dashboard', [

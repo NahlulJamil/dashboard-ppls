@@ -75,10 +75,7 @@
 @section('content')
 
 <h1 class="page-title">Data Input & Template Excel</h1>
-<p class="page-desc">
-    Semakin jelas struktur input, semakin kecil peluang dashboard menghasilkan angka yang salah.<br>
-    Ikuti alur proses end-to-end di bawah ini.
-</p>
+<br><br>
 
 {{-- ERROR MODAL --}}
 @if(session('import_errors'))
