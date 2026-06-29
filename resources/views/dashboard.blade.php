@@ -935,6 +935,47 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 
+{{-- DELETE CONFIRMATION MODAL --}}
+<div class="edit-modal-overlay" id="deleteConfirmOverlay" onmousedown="if(event.target===this)this.dataset.close='1';" onmouseup="if(this.dataset.close==='1' && event.target===this){closeDeleteModal();} this.dataset.close='0';">
+    <div class="edit-modal" style="max-width:440px;text-align:center">
+        <div class="edit-modal-header" style="border-bottom:none;padding-bottom:0">
+            <h3 style="color:#b91c1c"><i class="fas fa-exclamation-triangle" style="color:#dc2626"></i> Konfirmasi Hapus Data</h3>
+            <button class="edit-modal-close" onclick="closeDeleteModal()">&times;</button>
+        </div>
+        <div class="edit-modal-body" style="padding:20px 24px">
+            <div style="width:60px;height:60px;border-radius:50%;background:#fef2f2;color:#dc2626;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 16px">
+                <i class="fas fa-trash-alt"></i>
+            </div>
+            <p style="font-size:15px;color:#1e293b;font-weight:600;margin-bottom:8px">Apakah Anda yakin ingin menghapus data?</p>
+            <p style="font-size:13px;color:#64748b;line-height:1.5" id="deleteConfirmText">Tindakan ini akan menghapus data terpilih secara permanen dari database dan tidak dapat dibatalkan.</p>
+        </div>
+        <div class="edit-modal-footer" style="justify-content:center;gap:12px;background:#f8fafc;border-top:1px solid #e2e8f0;border-radius:0 0 16px 16px">
+            <button class="btn btn-outline" onclick="closeDeleteModal()" style="padding:10px 20px">Batal</button>
+            <button class="btn btn-red" id="confirmDeleteBtn" onclick="executeBulkDelete()" style="padding:10px 24px;background:#dc2626">
+                <i class="fas fa-trash-alt"></i> Ya, Hapus Data
+            </button>
+        </div>
+    </div>
+</div>
+
+{{-- DASHBOARD ERROR / ALERT MODAL --}}
+<div class="edit-modal-overlay" id="dashboardErrorOverlay" onmousedown="if(event.target===this)this.dataset.close='1';" onmouseup="if(this.dataset.close==='1' && event.target===this){closeDashboardErrorModal();} this.dataset.close='0';">
+    <div class="edit-modal" style="max-width:460px">
+        <div class="edit-modal-header" style="background:#fef2f2;border-bottom:1px solid #fecaca;border-radius:16px 16px 0 0">
+            <h3 style="color:#991b1b;font-size:16px;display:flex;align-items:center;gap:8px">
+                <i class="fas fa-exclamation-circle" style="color:#dc2626;font-size:18px"></i> <span id="dashboardErrorTitle">Kesalahan Validasi</span>
+            </h3>
+            <button class="edit-modal-close" onclick="closeDashboardErrorModal()" style="color:#991b1b">&times;</button>
+        </div>
+        <div class="edit-modal-body" style="padding:20px 24px">
+            <div id="dashboardErrorContent" style="color:#374151;font-size:13.5px;line-height:1.6"></div>
+        </div>
+        <div class="edit-modal-footer" style="background:#f9fafb;border-top:1px solid #e5e7eb">
+            <button class="btn btn-red" onclick="closeDashboardErrorModal()" style="padding:8px 20px">Tutup</button>
+        </div>
+    </div>
+</div>
+
 <script>
 // === Lazy Loading Table ===
 const isAdmin = {{ ($isAdmin ?? false) ? 'true' : 'false' }};
@@ -1170,7 +1211,20 @@ function updateBulkToolbar() {
 
 function bulkDeleteSelected() {
     if (selectedIds.size === 0) return;
-    if (!confirm(`Yakin ingin menghapus ${selectedIds.size} data terpilih? Tindakan ini tidak dapat dibatalkan.`)) return;
+    const count = selectedIds.size;
+    document.getElementById('deleteConfirmText').textContent = `Tindakan ini akan menghapus ${count} data terpilih secara permanen dari database dan tidak dapat dibatalkan.`;
+    document.getElementById('deleteConfirmOverlay').classList.add('show');
+}
+
+function closeDeleteModal() {
+    document.getElementById('deleteConfirmOverlay').classList.remove('show');
+}
+
+function executeBulkDelete() {
+    if (selectedIds.size === 0) return;
+    const btn = document.getElementById('confirmDeleteBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menghapus...';
 
     fetch('/api/data-plps/bulk-delete', {
         method: 'POST',
@@ -1183,16 +1237,43 @@ function bulkDeleteSelected() {
     })
     .then(res => res.json())
     .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-trash-alt"></i> Ya, Hapus Data';
+        closeDeleteModal();
+
         if (data.success) {
             showToast(data.message);
             selectedIds.clear();
             updateBulkToolbar();
             resetAndLoadTable();
         } else {
-            alert('Gagal menghapus: ' + (data.message || 'Unknown error'));
+            showDashboardErrorModal('Gagal Menghapus Data', data.message || 'Terjadi kesalahan saat menghapus data.');
         }
     })
-    .catch(err => alert('Error: ' + err.message));
+    .catch(err => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-trash-alt"></i> Ya, Hapus Data';
+        closeDeleteModal();
+        showDashboardErrorModal('Gagal Menghapus Data', err.message || 'Terjadi kesalahan koneksi.');
+    });
+}
+
+function showDashboardErrorModal(title, message) {
+    document.getElementById('dashboardErrorTitle').textContent = title;
+    const contentDiv = document.getElementById('dashboardErrorContent');
+    if (typeof message === 'string' && message.includes('\n')) {
+        const lines = message.split('\n').filter(l => l.trim() !== '');
+        contentDiv.innerHTML = '<ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px">' + 
+            lines.map(l => `<li>${esc(l)}</li>`).join('') + 
+            '</ul>';
+    } else {
+        contentDiv.textContent = message;
+    }
+    document.getElementById('dashboardErrorOverlay').classList.add('show');
+}
+
+function closeDashboardErrorModal() {
+    document.getElementById('dashboardErrorOverlay').classList.remove('show');
 }
 
 function showToast(msg) {
@@ -1293,7 +1374,7 @@ function saveEdit() {
         if (err.errors) {
             errMsg = Object.values(err.errors).flat().join('\n');
         }
-        alert('Kesalahan Validasi:\n' + errMsg);
+        showDashboardErrorModal('Kesalahan Validasi', errMsg);
     });
 }
 

@@ -120,7 +120,7 @@
 
             <div class="preview-notice">
                 <i class="fas fa-eye"></i>
-                <span>Preview ini digunakan untuk verifikasi data sebelum proses import. Jika terdapat kesalahan data, silakan perbarui file template Excel dan unggah kembali file tersebut..</span>
+                <span>Menampilkan preview 50 baris pertama untuk verifikasi. Jika terdapat kesalahan data, silakan perbarui file template Excel dan unggah kembali file tersebut.</span>
             </div>
 
             <div class="preview-wrap">
@@ -204,15 +204,148 @@
     
 </div>
 
+<!-- Progress Overlay Modal -->
+<div class="modal-overlay" id="progressModal" style="display:none; z-index: 9999;">
+    <div class="modal-box" style="max-width: 500px; text-align: center; padding: 36px 24px;">
+        <div style="font-size: 40px; margin-bottom: 16px;" id="progressIcon">
+            <i class="fas fa-database fa-spin" style="color: #7B1113;"></i>
+        </div>
+        <h3 style="font-size: 18px; font-weight: 700; color: #1e293b; margin-bottom: 8px;" id="progressTitle">Menyimpan ke Database...</h3>
+        <p style="font-size: 13px; color: #64748b; margin-bottom: 24px;" id="progressStatus">Menyiapkan penyimpanan data...</p>
+        
+        <div style="background: #e2e8f0; border-radius: 999px; height: 10px; overflow: hidden; margin-bottom: 12px; position: relative;">
+            <div id="progressBar" style="background: linear-gradient(135deg,#7B1113,#A41E1E); width: 0%; height: 100%; transition: width 0.2s ease-out; border-radius: 999px;"></div>
+        </div>
+        <div style="font-size: 14px; font-weight: 700; color: #1e293b;" id="progressPercent">0%</div>
+    </div>
+</div>
+
+<!-- Generic Error Modal -->
+<div class="modal-overlay" id="genericErrorModal" style="display:none;">
+    <div class="modal-box">
+        <div class="modal-header" style="background:linear-gradient(135deg,#ef4444,#dc2626);">
+            <div style="display:flex;align-items:center;gap:10px">
+                <span style="font-size:22px">⚠️</span>
+                <div>
+                    <div style="font-size: 16px; font-weight: 700;" id="genericErrorTitle">Terjadi Kesalahan</div>
+                </div>
+            </div>
+            <button class="close-btn" onclick="document.getElementById('genericErrorModal').style.display='none'">✕</button>
+        </div>
+        <div class="modal-body">
+            <div style="padding:20px; text-align:center; color:#374151; line-height:1.6" id="genericErrorContent">
+                -
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-red" onclick="document.getElementById('genericErrorModal').style.display='none'">Tutup</button>
+        </div>
+    </div>
+</div>
+
 @endsection
 
 @section('scripts')
 <script>
-document.getElementById('confirmForm').addEventListener('submit', function() {
-    const btn = document.getElementById('confirmBtn');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
+const confirmForm = document.getElementById('confirmForm');
+const tempPath = '{{ session("last_import_path") }}';
+const previewTotalRows = {{ $rowCount }};
+
+confirmForm.addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    // Show Progress Modal
+    const progressModal = document.getElementById('progressModal');
+    const progressTitle = document.getElementById('progressTitle');
+    const progressStatus = document.getElementById('progressStatus');
+    const progressBar = document.getElementById('progressBar');
+    const progressPercent = document.getElementById('progressPercent');
+
+    progressModal.style.display = 'flex';
+    progressTitle.textContent = "Menyimpan ke Database...";
+    progressStatus.textContent = "Menyiapkan penyimpanan...";
+    progressBar.style.width = "0%";
+    progressPercent.textContent = "0%";
+
+    // Start importing in chunks
+    const chunkSize = 1000;
+    importChunk(tempPath, 2, chunkSize, previewTotalRows);
 });
+
+function importChunk(tempPath, offset, limit, totalRows) {
+    const progressStatus = document.getElementById('progressStatus');
+    const progressBar = document.getElementById('progressBar');
+    const progressPercent = document.getElementById('progressPercent');
+
+    // Update status text
+    const endRow = Math.min(offset + limit - 1, totalRows + 1);
+    progressStatus.textContent = `Menyimpan baris ${offset - 1} s/d ${endRow - 1} dari ${totalRows}...`;
+
+    // Calculate percentage
+    const processed = offset - 2;
+    const percent = Math.floor((processed / totalRows) * 100);
+    progressBar.style.width = `${percent}%`;
+    progressPercent.textContent = `${percent}%`;
+
+    // Process chunk request
+    fetch('{{ route("input.process-chunk") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({
+            temp_path: tempPath,
+            mode: 'import',
+            offset: offset,
+            limit: limit
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.indexOf("application/json") !== -1) {
+                return response.json().then(err => { throw err; });
+            } else {
+                return response.text().then(text => {
+                    throw { message: `Kesalahan Server (${response.status}): Silakan periksa log server untuk detail.` };
+                });
+            }
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            const nextOffset = offset + limit;
+            if (nextOffset <= totalRows + 1) {
+                // Process next chunk
+                importChunk(tempPath, nextOffset, limit, totalRows);
+            } else {
+                // Done! Update progress to 100%
+                progressBar.style.width = "100%";
+                progressPercent.textContent = "100%";
+                
+                setTimeout(() => {
+                    document.getElementById('progressModal').style.display = 'none';
+                    // Redirect back to input page with success message
+                    window.location.href = '{{ url("/input-data") }}';
+                }, 400);
+            }
+        } else {
+            throw { message: data.message || "Gagal menyimpan data." };
+        }
+    })
+    .catch(err => {
+        document.getElementById('progressModal').style.display = 'none';
+        showGenericError(err.message || `Terjadi kesalahan saat menyimpan baris ${offset} - ${endRow}.`);
+    });
+}
+
+function showGenericError(message) {
+    document.getElementById('genericErrorContent').textContent = message;
+    document.getElementById('genericErrorModal').style.display = 'flex';
+}
 
 // Pagination Logic
 const allRows = document.querySelectorAll('.preview-row');

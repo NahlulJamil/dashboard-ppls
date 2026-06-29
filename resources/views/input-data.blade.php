@@ -78,15 +78,14 @@
 <br><br>
 
 {{-- ERROR MODAL --}}
-@if(session('import_errors'))
-<div class="modal-overlay" id="errorModal">
+<div class="modal-overlay" id="errorModal" style="{{ session('import_errors') ? 'display:flex' : 'display:none' }}">
     <div class="modal-box">
         <div class="modal-header">
             <div style="display:flex;align-items:center;gap:10px">
                 <span style="font-size:22px">⚠️</span>
                 <div>
                     <div style="font-size:16px;font-weight:700">Validasi Gagal</div>
-                    <div style="font-size:12px;opacity:.9">{{ count(session('import_errors')) }} error ditemukan</div>
+                    <div style="font-size:12px;opacity:.9" id="errorCountText">{{ session('import_errors') ? count(session('import_errors')) : 0 }} error ditemukan</div>
                 </div>
             </div>
             <button class="close-btn" onclick="document.getElementById('errorModal').style.display='none'">✕</button>
@@ -94,22 +93,24 @@
         <div class="modal-body">
             <table class="modal-table">
                 <thead><tr><th style="width:90px">Baris</th><th>Keterangan Error</th></tr></thead>
-                <tbody>
-                @foreach(session('import_errors') as $error)
-                    @php
-                        $parts = explode(': ', $error, 2);
-                        $lineNum = str_replace('Baris ', '', $parts[0] ?? '');
-                        $message = $parts[1] ?? $error;
-                        $isSimilarity = str_contains($error, 'Kemungkinan typo') || str_contains($error, 'kemiripan');
-                    @endphp
-                    <tr style="{{ $isSimilarity ? 'background:#fffbeb' : '' }}">
-                        <td><span class="error-badge" style="{{ $isSimilarity ? 'background:#fef3c7;color:#b45309' : '' }}">Baris {{ $lineNum }}</span></td>
-                        <td style="color:#374151;line-height:1.5">
-                            @if($isSimilarity)<i class="fas fa-exclamation-triangle" style="color:#d97706;margin-right:4px"></i>@endif
-                            {{ $message }}
-                        </td>
-                    </tr>
-                @endforeach
+                <tbody id="errorTableBody">
+                @if(session('import_errors'))
+                    @foreach(session('import_errors') as $error)
+                        @php
+                            $parts = explode(': ', $error, 2);
+                            $lineNum = str_replace('Baris ', '', $parts[0] ?? '');
+                            $message = $parts[1] ?? $error;
+                            $isSimilarity = str_contains($error, 'Kemungkinan typo') || str_contains($error, 'kemiripan');
+                        @endphp
+                        <tr style="{{ $isSimilarity ? 'background:#fffbeb' : '' }}">
+                            <td><span class="error-badge" style="{{ $isSimilarity ? 'background:#fef3c7;color:#b45309' : '' }}">Baris {{ $lineNum }}</span></td>
+                            <td style="color:#374151;line-height:1.5">
+                                @if($isSimilarity)<i class="fas fa-exclamation-triangle" style="color:#d97706;margin-right:4px"></i>@endif
+                                {{ $message }}
+                            </td>
+                        </tr>
+                    @endforeach
+                @endif
                 </tbody>
             </table>
         </div>
@@ -118,22 +119,20 @@
         </div>
     </div>
 </div>
-@endif
 
-@if(session('error'))
-<div class="modal-overlay" id="genericErrorModal">
+<div class="modal-overlay" id="genericErrorModal" style="{{ session('error') ? 'display:flex' : 'display:none' }}">
     <div class="modal-box">
         <div class="modal-header" style="background:linear-gradient(135deg,#ef4444,#dc2626);">
             <div style="display:flex;align-items:center;gap:10px">
                 <span style="font-size:22px">⚠️</span>
                 <div>
-                    <div style="font-size:16px;font-weight:700">Terjadi Kesalahan</div>
+                    <div style="font-size:16px;font-weight:700" id="genericErrorTitle">Terjadi Kesalahan</div>
                 </div>
             </div>
             <button class="close-btn" onclick="document.getElementById('genericErrorModal').style.display='none'">✕</button>
         </div>
         <div class="modal-body">
-            <div style="padding:20px; text-align:center; color:#374151; line-height:1.6">
+            <div style="padding:20px; text-align:center; color:#374151; line-height:1.6" id="genericErrorContent">
                 {{ session('error') }}
             </div>
         </div>
@@ -142,7 +141,6 @@
         </div>
     </div>
 </div>
-@endif
 
 {{-- TEMPLATE INFO + FIELD TABLE --}}
 <div class="template-grid">
@@ -258,6 +256,22 @@
     @endif
 </div>
 
+<!-- Progress Overlay Modal -->
+<div class="modal-overlay" id="progressModal" style="display:none; z-index: 9999;">
+    <div class="modal-box" style="max-width: 500px; text-align: center; padding: 36px 24px;">
+        <div style="font-size: 40px; margin-bottom: 16px;" id="progressIcon">
+            <i class="fas fa-spinner fa-spin" style="color: #7B1113;"></i>
+        </div>
+        <h3 style="font-size: 18px; font-weight: 700; color: #1e293b; margin-bottom: 8px;" id="progressTitle">Memvalidasi Data...</h3>
+        <p style="font-size: 13px; color: #64748b; margin-bottom: 24px;" id="progressStatus">Mengunggah berkas ke server...</p>
+        
+        <div style="background: #e2e8f0; border-radius: 999px; height: 10px; overflow: hidden; margin-bottom: 12px; position: relative;">
+            <div id="progressBar" style="background: linear-gradient(135deg,#7B1113,#A41E1E); width: 0%; height: 100%; transition: width 0.2s ease-out; border-radius: 999px;"></div>
+        </div>
+        <div style="font-size: 14px; font-weight: 700; color: #1e293b;" id="progressPercent">0%</div>
+    </div>
+</div>
+
 @endsection
 
 @section('scripts')
@@ -308,11 +322,187 @@ function formatSize(bytes) {
     return (bytes / 1048576).toFixed(1) + ' MB';
 }
 
-// Form submit loading state
-uploadForm.addEventListener('submit', function() {
-    const btn = document.getElementById('uploadBtn');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memvalidasi...';
+// Intercept form submit for AJAX chunk validation
+uploadForm.addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    // Show Progress Modal
+    const progressModal = document.getElementById('progressModal');
+    const progressTitle = document.getElementById('progressTitle');
+    const progressStatus = document.getElementById('progressStatus');
+    const progressBar = document.getElementById('progressBar');
+    const progressPercent = document.getElementById('progressPercent');
+
+    progressModal.style.display = 'flex';
+    progressTitle.textContent = "Memvalidasi Data...";
+    progressStatus.textContent = "Mengunggah berkas ke server...";
+    progressBar.style.width = "0%";
+    progressPercent.textContent = "0%";
+
+    // Prepare upload data
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('_token', '{{ csrf_token() }}');
+
+    fetch('{{ route("input.upload") }}', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'Accept': 'application/json'
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.indexOf("application/json") !== -1) {
+                return response.json().then(err => { throw err; });
+            } else {
+                return response.text().then(text => {
+                    throw { message: `Kesalahan Server (${response.status}): Silakan periksa log server untuk detail.` };
+                });
+            }
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            const totalRows = data.total_rows;
+            const tempPath = data.temp_path;
+
+            if (totalRows <= 0) {
+                throw { message: "Berkas Excel tidak memiliki baris data (kosong)." };
+            }
+
+            // Start validating in chunks
+            const chunkSize = 1000;
+            const allErrors = [];
+            validateChunk(tempPath, 2, chunkSize, totalRows, allErrors);
+        } else {
+            throw { message: data.message || "Gagal mengunggah berkas." };
+        }
+    })
+    .catch(err => {
+        progressModal.style.display = 'none';
+        showGenericError(err.message || "Terjadi kesalahan koneksi saat mengunggah berkas.");
+    });
 });
+
+function validateChunk(tempPath, offset, limit, totalRows, allErrors) {
+    const progressStatus = document.getElementById('progressStatus');
+    const progressBar = document.getElementById('progressBar');
+    const progressPercent = document.getElementById('progressPercent');
+
+    // Update status text
+    const endRow = Math.min(offset + limit - 1, totalRows + 1);
+    progressStatus.textContent = `Memvalidasi baris ${offset - 1} s/d ${endRow - 1} dari ${totalRows}...`;
+
+    // Calculate percentage
+    const processed = offset - 2;
+    const percent = Math.floor((processed / totalRows) * 100);
+    progressBar.style.width = `${percent}%`;
+    progressPercent.textContent = `${percent}%`;
+
+    // Process chunk request
+    fetch('{{ route("input.process-chunk") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({
+            temp_path: tempPath,
+            mode: 'validate',
+            offset: offset,
+            limit: limit
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.indexOf("application/json") !== -1) {
+                return response.json().then(err => { throw err; });
+            } else {
+                return response.text().then(text => {
+                    throw { message: `Kesalahan Server (${response.status}): Silakan periksa log server untuk detail.` };
+                });
+            }
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            // Collect any validation errors
+            if (data.errors && data.errors.length > 0) {
+                allErrors.push(...data.errors);
+            }
+
+            const nextOffset = offset + limit;
+            if (nextOffset <= totalRows + 1) {
+                // Process next chunk
+                validateChunk(tempPath, nextOffset, limit, totalRows, allErrors);
+            } else {
+                // Done! Update progress to 100%
+                progressBar.style.width = "100%";
+                progressPercent.textContent = "100%";
+                
+                setTimeout(() => {
+                    document.getElementById('progressModal').style.display = 'none';
+
+                    if (allErrors.length > 0) {
+                        // Render and show errors modal
+                        renderValidationErrors(allErrors);
+                    } else {
+                        // All chunks validated successfully! Redirect to confirm page
+                        window.location.href = '{{ route("input.confirm.show") }}';
+                    }
+                }, 400);
+            }
+        } else {
+            throw { message: data.message || "Gagal memproses validasi data." };
+        }
+    })
+    .catch(err => {
+        document.getElementById('progressModal').style.display = 'none';
+        showGenericError(err.message || `Terjadi kesalahan saat memvalidasi baris ${offset} - ${endRow}.`);
+    });
+}
+
+function renderValidationErrors(errors) {
+    const errorCountText = document.getElementById('errorCountText');
+    const errorTableBody = document.getElementById('errorTableBody');
+
+    errorCountText.textContent = `${errors.length} error ditemukan`;
+    errorTableBody.innerHTML = '';
+
+    errors.forEach(error => {
+        const parts = error.split(': ');
+        const lineNum = parts[0].replace('Baris ', '');
+        const message = parts[1] || error;
+        const isSimilarity = error.includes('Kemungkinan typo') || error.includes('kemiripan');
+
+        const tr = document.createElement('tr');
+        if (isSimilarity) tr.style.background = '#fffbeb';
+
+        tr.innerHTML = `
+            <td><span class="error-badge" ${isSimilarity ? 'style="background:#fef3c7;color:#b45309"' : ''}>Baris ${lineNum}</span></td>
+            <td style="color:#374151;line-height:1.5">
+                ${isSimilarity ? '<i class="fas fa-exclamation-triangle" style="color:#d97706;margin-right:4px"></i>' : ''}
+                ${message}
+            </td>
+        `;
+        errorTableBody.appendChild(tr);
+    });
+
+    document.getElementById('errorModal').style.display = 'flex';
+}
+
+function showGenericError(message) {
+    document.getElementById('genericErrorContent').textContent = message;
+    document.getElementById('genericErrorModal').style.display = 'flex';
+}
 </script>
 @endsection

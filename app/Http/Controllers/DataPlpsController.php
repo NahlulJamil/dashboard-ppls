@@ -543,6 +543,181 @@ class DataPlpsController extends Controller
     }
 
     /**
+     * AJAX Step 1: Upload and save spreadsheet temporarily, return row count.
+     */
+    public function uploadTempFile(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|mimes:xlsx,csv|max:10240'
+        ]);
+
+        $originalName = $request->file('file')->getClientOriginalName();
+        $storedPath = $request->file('file')->store('temp-imports');
+
+        $fullPath = \Illuminate\Support\Facades\Storage::path($storedPath);
+
+        try {
+            // Read total row count using PhpSpreadsheet listWorksheetInfo (ultra-lightweight, does not load cells)
+            $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReaderForFile($fullPath);
+            $info = $reader->listWorksheetInfo($fullPath);
+            
+            $highestRow = 0;
+            if (!empty($info) && isset($info[0]['totalRows'])) {
+                $highestRow = $info[0]['totalRows'];
+            }
+            
+            $totalRows = max(0, $highestRow - 1); // Row 1 is header
+
+            // Save metadata to session
+            session([
+                'last_import_path' => $storedPath,
+                'last_import_filename' => $originalName,
+                'import_row_count' => $totalRows
+            ]);
+
+            // Reset processedKeys in session
+            session()->forget('import_processed_keys');
+
+            return response()->json([
+                'success' => true,
+                'temp_path' => $storedPath,
+                'total_rows' => $totalRows,
+                'filename' => $originalName
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal membaca berkas: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * AJAX Step 2: Validate or import a specific chunk.
+     */
+    public function processChunk(Request $request)
+    {
+        $request->validate([
+            'temp_path' => 'required|string',
+            'mode' => 'required|in:validate,import',
+            'offset' => 'required|integer|min:2',
+            'limit' => 'required|integer|min:1'
+        ]);
+
+        $tempPath = $request->temp_path;
+        $mode = $request->mode;
+        $offset = (int) $request->offset;
+        $limit = (int) $request->limit;
+
+        if (!\Illuminate\Support\Facades\Storage::exists($tempPath)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'File import tidak ditemukan. Silakan upload ulang.'
+            ], 400);
+        }
+
+        $fullPath = \Illuminate\Support\Facades\Storage::path($tempPath);
+
+        try {
+            // Read specific chunk using custom filter
+            $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReaderForFile($fullPath);
+            $reader->setReadDataOnly(true);
+            
+            $chunkFilter = new \App\Imports\ChunkReadFilter($offset, $limit);
+            $reader->setReadFilter($chunkFilter);
+            
+            $spreadsheet = $reader->load($fullPath);
+            $worksheet = $spreadsheet->getActiveSheet();
+            $highestRow = $worksheet->getHighestRow();
+
+            // Build a collection of row data: A to N (14 columns)
+            $chunkCollection = collect();
+            for ($rowNum = $offset; $rowNum < $offset + $limit; $rowNum++) {
+                if ($rowNum > $highestRow) break;
+                
+                $rowValues = [];
+                for ($col = 1; $col <= 14; $col++) {
+                    $rowValues[] = $worksheet->getCellByColumnAndRow($col, $rowNum)->getValue();
+                }
+                $chunkCollection->put($rowNum, $rowValues);
+            }
+
+            // Free memory
+            $spreadsheet->disconnectWorksheets();
+            unset($spreadsheet, $worksheet);
+
+            if ($chunkCollection->isEmpty()) {
+                return response()->json([
+                    'success' => true,
+                    'errors' => [],
+                    'valid_count' => 0
+                ]);
+            }
+
+            // Load processedKeys from session
+            if ($offset == 2) {
+                session()->forget(['import_processed_keys', 'import_valid_row_count']);
+                $processedKeys = [];
+            } else {
+                $processedKeys = session('import_processed_keys', []);
+            }
+
+            // Initialize Importer with chunk settings
+            $validateOnly = ($mode === 'validate');
+            $importer = new DataPlpsImport($validateOnly, true, $processedKeys);
+
+            try {
+                $importer->collection($chunkCollection);
+            } catch (\Exception $e) {
+                // Even if exception is thrown, $importer->errors will contain row-level errors
+            }
+
+            // Save updated processedKeys and accumulated validRowCount back to session
+            session(['import_processed_keys' => $importer->processedKeys]);
+            $currentValidCount = session('import_valid_row_count', 0) + $importer->validRowCount;
+            session(['import_valid_row_count' => $currentValidCount]);
+
+            if ($mode === 'import' && !empty($importer->errors)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Gagal menyimpan beberapa data: ' . implode(', ', $importer->errors)
+                ], 422);
+            }
+
+            // If importing and this is the last chunk
+            $isLastChunk = ($offset + $limit > $highestRow);
+            if ($mode === 'import' && $isLastChunk) {
+                // Record history using total valid rows imported
+                $totalCount = session('import_valid_row_count', $importer->validRowCount);
+                \App\Models\ImportHistory::create([
+                    'filename' => session('last_import_filename', 'file.xlsx'),
+                    'admin_id' => \Illuminate\Support\Facades\Auth::guard('admin')->id(),
+                    'rows_count' => $totalCount,
+                ]);
+
+                // Clean up files and session
+                \Illuminate\Support\Facades\Storage::delete($tempPath);
+                session()->forget(['last_import_path', 'last_import_filename', 'import_row_count', 'import_processed_keys', 'import_valid_row_count']);
+
+                // Flash success message for the next page load (redirect)
+                session()->flash('success', "{$totalCount} data berhasil diimport ke database!");
+                session()->flash('show_success_modal', true);
+            }
+
+            return response()->json([
+                'success' => true,
+                'errors' => $importer->errors,
+                'valid_count' => $importer->validRowCount
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal memproses data: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Step 2a: Show the confirmation page.
      * Also reads raw Excel rows for a read-only preview table.
      */
@@ -556,36 +731,50 @@ class DataPlpsController extends Controller
             return redirect('/input-data')->with('error', 'Tidak ada data untuk dikonfirmasi. Silakan upload ulang.');
         }
 
-        // Build a lightweight preview from the stored file (raw rows, no DB writes).
+        // Build a lightweight preview from the stored file (raw rows, no DB writes, limited to first 50 rows).
         $previewRows = [];
         try {
             $fullPath = \Illuminate\Support\Facades\Storage::path($storedPath);
-            $rawCollection = Excel::toCollection(null, $fullPath)->first();
+            
+            $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReaderForFile($fullPath);
+            $reader->setReadDataOnly(true);
+            
+            // Limit preview to the first 50 rows (rows 2 to 51)
+            $chunkFilter = new \App\Imports\ChunkReadFilter(2, 50);
+            $reader->setReadFilter($chunkFilter);
+            
+            $spreadsheet = $reader->load($fullPath);
+            $worksheet = $spreadsheet->getActiveSheet();
+            $highestRow = $worksheet->getHighestRow();
 
-            if ($rawCollection) {
-                foreach ($rawCollection as $index => $row) {
-                    if ($index == 0) continue; // skip header
-
-                    // Preserve Excel row number (header = row 1, data starts at row 2)
-                    $previewRows[] = [
-                        'excel_row'        => $index + 1,
-                        'program'          => trim($row[0]  ?? ''),
-                        'sub_program'      => trim($row[1]  ?? ''),
-                        'fakultas'         => trim($row[2]  ?? ''),
-                        'prodi'            => trim($row[3]  ?? ''),
-                        'nim'              => trim($row[4]  ?? ''),
-                        'nama'             => trim($row[5]  ?? ''),
-                        'tahun_ajaran'     => trim($row[6]  ?? ''),
-                        'semester'         => trim($row[7]  ?? ''),
-                        'semester_ta'      => trim($row[8]  ?? ''),
-                        'kegiatan'         => trim($row[9]  ?? ''),
-                        'penyelenggara'    => trim($row[10] ?? ''),
-                        'mitra'            => trim($row[11] ?? ''),
-                        'dosen_pembimbing' => trim($row[12] ?? ''),
-                        'sks'              => trim($row[13] ?? ''),
-                    ];
+            for ($rowNum = 2; $rowNum <= min($highestRow, 51); $rowNum++) {
+                $rowValues = [];
+                for ($col = 1; $col <= 14; $col++) {
+                    $rowValues[] = $worksheet->getCellByColumnAndRow($col, $rowNum)->getValue();
                 }
+
+                $previewRows[] = [
+                    'excel_row'        => $rowNum,
+                    'program'          => trim($rowValues[0]  ?? ''),
+                    'sub_program'      => trim($rowValues[1]  ?? ''),
+                    'fakultas'         => trim($rowValues[2]  ?? ''),
+                    'prodi'            => trim($rowValues[3]  ?? ''),
+                    'nim'              => trim($rowValues[4]  ?? ''),
+                    'nama'             => trim($rowValues[5]  ?? ''),
+                    'tahun_ajaran'     => trim($rowValues[6]  ?? ''),
+                    'semester'         => trim($rowValues[7]  ?? ''),
+                    'semester_ta'      => trim($rowValues[8]  ?? ''),
+                    'kegiatan'         => trim($rowValues[9]  ?? ''),
+                    'penyelenggara'    => trim($rowValues[10] ?? ''),
+                    'mitra'            => trim($rowValues[11] ?? ''),
+                    'dosen_pembimbing' => trim($rowValues[12] ?? ''),
+                    'sks'              => trim($rowValues[13] ?? ''),
+                ];
             }
+
+            // Free memory
+            $spreadsheet->disconnectWorksheets();
+            unset($spreadsheet, $worksheet);
         } catch (\Exception $e) {
             // If preview fails, still show confirm page without table
             $previewRows = [];
